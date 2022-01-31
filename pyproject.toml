@@ -1,0 +1,43 @@
+[project]
+name = "arrg"
+version = "0.0.1"
+description = "A library for building modular command-line applications"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.urls]
+Homepage = "https://github.com/terror/arrg"
+Issues = "https://github.com/terror/arrg/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arrg"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests"]
+
+[tool.ruff]
+src = ["src"]
+indent-width = 2
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 20
+indent-style = "space"
+quote-style = "single"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest-mock>=3.14.0",
+    "pytest>=8.3.3",
+    "ruff>=0.7.3",
+    "isort>=5.13.2",
+]
