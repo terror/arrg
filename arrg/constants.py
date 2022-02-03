@@ -1,0 +1,2 @@
+CUSTOM = 'custom'
+SUPPORTED = 'supported'

@@ -4,7 +4,7 @@
  <img width='10%' src='https://oldschool.runescape.wiki/images/Arrg.png?2e0cb'/>
 </div>
 
-**arrg** is a Python library for building better command-line applications.
+**arrg** is a Python library for building modular command-line applications.
 Heavily inspired by the Rust crate
 [`structopt`](https://github.com/TeXitoi/structopt).
 

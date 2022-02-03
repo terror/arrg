@@ -9,7 +9,7 @@ setup(
   version="0.0.0",
   author="Liam Scalzulli",
   author_email="liam@scalzulli.com",
-  description=("A library for creating ergonomic command-line applications"),
+  description=("A library for building modular command-line applications"),
   long_description_content_type="text/markdown",
   license="CC0 1.0 Universal (CC0 1.0) Public Domain Dedication",
   keywords="",

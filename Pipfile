@@ -4,10 +4,12 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [packages]
+arrg = {editable = true, path = "."}
 
 [dev-packages]
-yapf = "*"
+pytest = "*"
 twine = "*"
+yapf = "*"
 
 [requires]
-python_version = "3.9"
+python_version = "3.10"
