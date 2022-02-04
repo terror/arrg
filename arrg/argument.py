@@ -1,7 +1,7 @@
-from typing import List
+from typing import List, Dict
 
 class Argument:
-  def __init__(self, name: str, parameters: dict | None) -> None:
+  def __init__(self, name: str, parameters: Dict[str, str] | None) -> None:
     self.name = name
     self.parameters = parameters
 
@@ -9,12 +9,18 @@ class Argument:
     if not self.parameters:
       return [f'{self.name}']
 
-    ret = [f'--{self.name}']
-    for key, value in self.parameters.items():
-      if (output := getattr(self, f'_{key}')(value)):
-        ret.append(output)
-
-    return ret
+    return [
+      f'--{self.name}',
+      *list(
+        filter(
+          lambda output: output is not None,
+          map(
+            lambda pair: getattr(self, f'_{pair[0]}')(pair[1]),
+            self.parameters.items()
+          )
+        )
+      )
+    ]
 
   def _short(self, value: str | bool | None) -> str | None:
     if isinstance(value, bool):
