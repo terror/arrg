@@ -1,4 +1,5 @@
-from typing import List, Dict
+from typing import Dict, List
+
 
 class Argument:
   def __init__(self, name: str, parameters: Dict[str, str] | None) -> None:
@@ -14,12 +15,9 @@ class Argument:
       *list(
         filter(
           lambda output: output is not None,
-          map(
-            lambda pair: getattr(self, f'_{pair[0]}')(pair[1]),
-            self.parameters.items()
-          )
+          map(lambda pair: getattr(self, f'_{pair[0]}')(pair[1]), self.parameters.items()),
         )
-      )
+      ),
     ]
 
   def _short(self, value: str | bool | None) -> str | None:

@@ -1,7 +1,9 @@
 from argparse import ArgumentParser
 from dataclasses import dataclass
+
 from .argument import Argument
 from .constants import CUSTOM, SUPPORTED
+
 
 def process(cls, *args, **kwargs):
   parser = ArgumentParser(**kwargs)
@@ -9,8 +11,7 @@ def process(cls, *args, **kwargs):
   def parse(cls, args=[]):
     for name, field in cls.__dataclass_fields__.items():
       parser.add_argument(
-        *Argument(name, field.metadata.get(CUSTOM)).run(),
-        **(field.metadata.get(SUPPORTED) or {})
+        *Argument(name, field.metadata.get(CUSTOM)).run(), **(field.metadata.get(SUPPORTED) or {})
       )
     return vars(parser.parse_args(args))
 

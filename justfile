@@ -2,29 +2,35 @@ set dotenv-load
 
 export EDITOR := 'nvim'
 
+alias c := check
 alias f := fmt
 alias t := test
 
 default:
   just --list
 
+all: fmt check readme
+
 build:
-	python3 setup.py sdist && python3 setup.py build
+  uv build
 
-clean:
-	rm -rf dist build *.egg-info
+dev-deps:
+  cargo install present tokei typos
 
-edit:
-	pipenv install -e .
+check:
+  uv run ruff check
+
+count:
+  tokei src
 
 fmt:
-	yapf --in-place --recursive .
-
-lock:
-	pipenv lock --pre
+  ruff check --select I --fix && ruff format
 
 publish:
-	twine upload dist/*
+  rm -rf dist && uv build && uv publish
 
-test:
-	pytest
+readme:
+  present --in-place README.md && typos --write-changes README.md
+
+test *args:
+  uv run pytest --verbose {{args}}

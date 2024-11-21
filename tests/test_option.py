@@ -1,5 +1,7 @@
 import pytest
+
 from arrg import app, option
+
 
 def test_positional():
   @app
@@ -8,12 +10,14 @@ def test_positional():
 
   assert Arguments.from_iter(['test']).input == 'test'
 
+
 def test_long_bool():
   @app
   class Arguments:
     input: str = option(long=True)
 
   assert Arguments.from_iter(['--input', 'test']).input == 'test'
+
 
 def test_long_str():
   @app
@@ -22,12 +26,14 @@ def test_long_str():
 
   assert Arguments.from_iter(['--long_input', 'test']).input == 'test'
 
+
 def test_short_bool():
   @app
   class Arguments:
     input: str = option(short=True)
 
   assert Arguments.from_iter(['-i', 'test']).input == 'test'
+
 
 def test_short_str():
   @app
