@@ -1,2 +1,0 @@
-CUSTOM = 'custom'
-SUPPORTED = 'supported'

@@ -1,6 +1,4 @@
+*.egg-info/
 /.DS_Store
-/notes.md
-/*.egg-info
-/build
 /dist
-/.pytest_cache
+__pycache__/
