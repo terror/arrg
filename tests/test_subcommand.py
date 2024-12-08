@@ -12,6 +12,9 @@ def test_basic_subcommand(capsys):
   class Git:
     status: Status
 
+  result = Git.from_iter(['status'])
+  assert not result.status.verbose
+
   result = Git.from_iter(['status', '--verbose'])
   assert result.status.verbose
 
