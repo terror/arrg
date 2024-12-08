@@ -423,6 +423,7 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
 def option(
   short: t.Optional[t.Union[str, bool]] = None,
   long: t.Optional[t.Union[str, bool]] = None,
+  default_value: t.Any = MISSING,
   **kwargs: t.Any,
 ) -> Field:
   """
@@ -440,23 +441,15 @@ def option(
     long: Long form configuration
       - If string, uses that name (e.g., 'output-file' -> '--output-file')
       - If None, uses field name
+    default_value: Default value for the argument if not provided
     **kwargs: Additional arguments passed to ArgumentParser.add_argument()
 
   Returns:
-      Field: A dataclass field with CLI metadata
-
-  Example:
-    @app
-    class CLI:
-      # Creates --verbose/-v flag
-      verbose: bool = option(short=True)
-
-      # Creates --output/-o with custom long form
-      output: str = option(short='o', long='output-file')
-
-      # Creates --count/-n with type validation and default
-      count: int = option(short='n', type=int, default=0)
+    Field: A dataclass field with CLI metadata
   """
+  if default_value is not MISSING:
+    kwargs['default'] = default_value
+
   return field(
     metadata={
       CUSTOM: {
@@ -464,7 +457,8 @@ def option(
         'long': long,
       },
       SUPPORTED: kwargs,
-    }
+    },
+    default=default_value if default_value is not MISSING else MISSING,
   )
 
 
