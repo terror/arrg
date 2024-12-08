@@ -1,5 +1,3 @@
-import pytest
-
 from arrg import app, option
 
 

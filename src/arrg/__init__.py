@@ -90,10 +90,10 @@ def add_argument_to_parser(parser: ArgumentParser, name: str, field_info: Field)
   metadata = field_info.metadata.get(CUSTOM, {})
   kwargs = field_info.metadata.get(SUPPORTED, {})
 
-  if field_info.type == bool:
+  if field_info.type is bool:
     kwargs['action'] = 'store_true'
     kwargs.setdefault('default', False)
-  elif field_info.type == int:
+  elif field_info.type is int:
     kwargs['type'] = int
 
   default = get_field_default(field_info)

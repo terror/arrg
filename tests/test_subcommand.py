@@ -1,5 +1,3 @@
-from argparse import ArgumentParser
-
 import pytest
 
 from arrg import app, option, subcommand
@@ -27,7 +25,6 @@ def test_subcommand_help_text(capsys):
   class Git:
     status: Status
 
-  # Test help text
   with pytest.raises(SystemExit):
     Git.from_iter(['--help'])
 
