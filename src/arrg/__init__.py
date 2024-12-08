@@ -203,35 +203,31 @@ def _process_subcommand(
   parent_parser: ArgumentParser,
   name: str,
   field_type: t.Type[t.Any],
+  parent_path: str = '',
 ) -> None:
   """
   Process a subcommand field by creating subparsers and recursively adding arguments.
 
-  This function handles the creation of nested command-line interfaces, similar to how
-  Git uses subcommands (e.g., 'git commit', 'git push'). It recursively processes
-  nested subcommands and their arguments to build a complete command hierarchy.
+  Creates a subparser for the given field and processes all of its arguments. For nested
+  subcommands, builds a full command path that tracks the hierarchy (e.g., "remote push").
 
   Args:
     parent_parser: The parent ArgumentParser to attach subcommands to
     name: The name of the subcommand (used in CLI)
-    field_type:
-      The type of the field being processed, expected to be a class
-      decorated with @subcommand
+    field_type: The type of the field being processed
+    parent_path: The command path of the parent parser, used for nested commands
 
   Raises:
     TypeError: If field_type is not decorated with @subcommand
-
-  Notes:
-    - Skips processing of any field named 'return'
-    - Recursively processes nested subcommands
-    - Automatically adds arguments based on field types and options
-    - Creates a new subparser for each subcommand level
   """
   if not _is_subcommand(field_type):
     raise TypeError(f'Command {name} must be decorated with @subcommand')
 
   subparsers = _get_or_create_subparsers(parent_parser)
+  command_path = f'{parent_path} {name}'.strip()
+
   subparser = subparsers.add_parser(name)
+  subparser.set_defaults(command=command_path)
 
   for field_name, field_info in field_type.__dataclass_fields__.items():
     if field_name == 'return':
@@ -240,7 +236,7 @@ def _process_subcommand(
     field_type_hint = t.get_type_hints(field_type)[field_name]
 
     if _is_subcommand(field_type_hint):
-      _process_subcommand(subparser, field_name, field_type_hint)
+      _process_subcommand(subparser, field_name, field_type_hint, command_path)
     else:
       _add_argument_to_parser(subparser, field_name, field_info)
 
@@ -251,53 +247,53 @@ def _build_subcommand_instance(
   command_path: str = '',
 ) -> t.Optional[t.Any]:
   """
-  Recursively build instances of subcommands from parsed arguments.
+  Build a subcommand instance from parsed arguments.
 
-  This function takes parsed command line arguments and constructs instances
-  of subcommand classes, handling the entire command hierarchy.
+  Recursively constructs instances of subcommand classes based on the command path.
+  For nested subcommands, only creates instances for commands that are part of the
+  active command path and properly assigns arguments at each level.
 
   Args:
     cls: The class type to instantiate
-    parsed_args: Parsed command line arguments from ArgumentParser
-    command_path: Current path in the command hierarchy (for nested commands)
+    parsed_args: Parsed command line arguments
+    command_path: Current path in the command hierarchy (e.g., "remote" or "remote push")
 
   Returns:
-    An instance of the subcommand class, or None if unable to construct
-
-  Notes:
-    - Handles nested subcommands recursively
-    - Preserves default values when specified
-    - Skips 'return' fields
-    - Returns None if construction fails
+    An instance of the subcommand class, or None if the command path doesn't match
   """
   command = getattr(parsed_args, 'command', None)
 
-  if command is None:
+  if not command:
     return None
 
-  if not command_path:
-    command_path = command.split()[0] if command else None
+  command_parts = command.split()
+  path_parts = command_path.split() if command_path else []
+
+  # Match command path
+  if path_parts and command_parts[: len(path_parts)] != path_parts:
+    return None
 
   kwargs: t.Dict[str, t.Any] = {}
 
-  for field_name, field_info in cls.__dataclass_fields__.items():
+  for field_name, _ in cls.__dataclass_fields__.items():
     if field_name == 'return':
       continue
 
-    field_type, default = t.get_type_hints(cls)[field_name], _get_field_default_value(field_info)
+    field_type = t.get_type_hints(cls)[field_name]
 
     if _is_subcommand(field_type):
-      if command and command.startswith(field_name):
-        nested_instance = _build_subcommand_instance(field_type, parsed_args)
+      next_path = f'{command_path} {field_name}'.strip()
+
+      # If this is the next command in the path
+      if len(command_parts) > len(path_parts) and command_parts[len(path_parts)] == field_name:
+        nested_instance = _build_subcommand_instance(field_type, parsed_args, next_path)
 
         if nested_instance is not None:
           kwargs[field_name] = nested_instance
-      elif default is not MISSING:
-        kwargs[field_name] = default
     else:
-      value = getattr(parsed_args, field_name, default)
+      value = getattr(parsed_args, field_name, None)
 
-      if value is not None and value is not MISSING:
+      if value is not None:
         kwargs[field_name] = value
 
   try:
@@ -356,6 +352,7 @@ def _process_inherited_fields(cls: t.Type[t.Any]) -> dict:
           fields[name] = getattr(cls, name)
         else:
           fields[name] = field(default=MISSING)
+
   return fields
 
 
@@ -469,19 +466,25 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
       if field_name == 'return':
         continue
 
-      field_type = t.get_type_hints(cls)[field_name]
-      default = _get_field_default_value(field_info)
+      field_type, default = t.get_type_hints(cls)[field_name], _get_field_default_value(field_info)
 
       if _is_subcommand(field_type):
         instance = _build_subcommand_instance(field_type, parsed_args, field_name)
+
         if instance is not None:
           result[field_name] = instance
         elif default is not MISSING:
           result[field_name] = default
       else:
         value = getattr(parsed_args, field_name, default)
+
         if value is not None and value is not MISSING:
           result[field_name] = value
+
+    # Add None for any missing subcommand fields
+    for name, _ in cls.__dataclass_fields__.items():
+      if name not in result and _is_subcommand(t.get_type_hints(cls)[name]):
+        result[name] = None
 
     return result
 
@@ -518,14 +521,7 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
     Example:
       instance = MyApp.from_iter(['--name', 'test'])
     """
-    parsed = parse(cls, args)
-
-    # Add None for any missing subcommand fields
-    for name, _ in cls.__dataclass_fields__.items():
-      if name not in parsed and _is_subcommand(t.get_type_hints(cls)[name]):
-        parsed[name] = None
-
-    return cls(**parsed)
+    return cls(**parse(cls, args))
 
   if not hasattr(cls, '__dataclass_fields__'):
     cls = dataclass(cls)

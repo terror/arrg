@@ -103,3 +103,26 @@ def test_subcommand_with_positional_args():
 
   assert result.clone.repository == 'https://github.com/user/repo'
   assert result.clone.destination == '/path/to/dest'
+
+
+def test_multiple_subcommands_same_level_with_same_arguments():
+  @subcommand
+  class Add:
+    foo: bool = option(short=True)
+
+  @subcommand
+  class Commit:
+    foo: bool = option(short=True)
+
+  @app
+  class Git:
+    add: Add
+    commit: Commit
+
+  result = Git.from_iter(['add', '-f'])
+  assert result.add.foo
+  assert result.commit is None
+
+  result = Git.from_iter(['commit', '-f'])
+  assert result.commit.foo
+  assert result.add is None
