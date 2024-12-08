@@ -33,3 +33,8 @@ class Arguments:
 if __name__ == '__main__':
   Arguments.from_args().run()
 ```
+
+### Prior Art
+
+This library is heavily indebted to the rust crate [structopt](https://docs.rs/structopt/latest/structopt/),
+for which heavy inspiration was drawn from.
