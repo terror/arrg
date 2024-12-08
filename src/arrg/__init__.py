@@ -73,13 +73,22 @@ def _make_optional_field() -> Field:
   """
   Create a dataclass field with default value of None.
 
-  Creates a field suitable for optional subcommands, ensuring they
-  default to None when not specified in the command line arguments.
+  This function creates a field suitable for optional subcommands in a CLI application.
+
+  The field is configured with:
+  - default=None: Makes the field optional
+  - init=False: Excludes the field from the class's __init__ signature
+
+  This configuration ensures that subcommands can be optional in the CLI without
+  affecting the class initialization process.
 
   Returns:
-    Field: A dataclass field with default=None
+    Field: A dataclass field configured for optional subcommands
   """
-  return field(default=None)
+  return field(
+    default=None,
+    init=False,
+  )
 
 
 def _get_field_default_value(field_info: Field) -> t.Any:
@@ -296,38 +305,99 @@ def _build_subcommand_instance(
     return None
 
 
-def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
+def _process_inherited_fields(cls: t.Type[t.Any]) -> dict:
   """
-  Process a class decorated with @app by adding CLI functionality.
+  Process fields from parent classes for subcommands.
 
-  This function transforms a regular class into a CLI application by:
-  - Converting it to a dataclass if needed
-  - Adding parser generation functionality
-  - Setting up argument handling
-  - Adding methods for parsing from command line or list
+  This function handles the inheritance of fields for CLI subcommands by:
+  1. Collecting fields from all parent classes
+  2. Adding fields from the current class's annotations
+  3. Preserving any existing field configurations
 
   Args:
-    cls: The class to transform
-    *args: Positional arguments for ArgumentParser
-    **kwargs: Keyword arguments for ArgumentParser
+    cls: The class to process inherited fields for
+
+  Returns:
+    dict:
+      A dictionary of field names to Field objects, containing all
+       inherited and current class fields
+
+  Notes:
+    - Fields from parent classes are collected first
+    - Current class fields override parent fields of the same name
+    - Fields without explicit values get a default MISSING sentinel
+    - The 'return' field is included in processing
+
+  Example:
+    @subcommand
+    class BaseCommand:
+      verbose: bool = option(short=True)
+
+    @subcommand
+    class Status(BaseCommand):
+      quiet: bool = option(short=True)
+
+    fields = _process_inherited_fields(Status)
+    # Contains both 'verbose' and 'quiet' fields with their options
+  """
+  fields = {}
+
+  # Get fields from parent classes
+  for base in cls.__bases__:
+    if hasattr(base, '__dataclass_fields__'):
+      fields.update(base.__dataclass_fields__)
+
+  # Add current class fields
+  if hasattr(cls, '__annotations__'):
+    for name, _ in cls.__annotations__.items():
+      if name not in fields:
+        if hasattr(cls, name):
+          fields[name] = getattr(cls, name)
+        else:
+          fields[name] = field(default=MISSING)
+  return fields
+
+
+def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
+  """
+  Process a class decorated with @app to create a command-line interface.
+
+  This function transforms a Python class into a CLI application by:
+  1. Converting it to a dataclass if needed
+  2. Adding parser generation functionality
+  3. Setting up argument handling
+  4. Adding methods for parsing from command line or list
+
+  Args:
+    cls: The class to transform into a CLI application
+    *args: Positional arguments passed to ArgumentParser
+    **kwargs: Keyword arguments passed to ArgumentParser
 
   Returns:
     The processed class with added CLI functionality:
-      - from_args(): Create instance from command line arguments
-      - from_iter(): Create instance from list of arguments
+    - from_args(): Create instance from command line arguments
+    - from_iter(): Create instance from list of arguments
 
-  Notes:
-    - Automatically handles subcommands
-    - Preserves type hints and default values
-    - Adds None defaults for optional subcommands
+  Example:
+    @app
+    class Git:
+      status: Status
+      verbose: bool = option(short=True)
+
+    # Creates a CLI that can be used as:
+    # git status --verbose
+    # The class can then be instantiated with:
+    instance = Git.from_args()  # From sys.argv
+    instance = Git.from_iter(['status', '-v'])  # From list
   """
 
   def add_field_defaults(cls: t.Type[t.Any]) -> None:
     """
     Add default None values for subcommand fields in a class.
 
-    Examines class type hints and ensures all subcommand fields have
-    a default value of None if not already specified.
+    This function ensures all subcommand fields have proper default values,
+    making them optional in the CLI interface. It examines the class's type
+    hints and adds default values where needed.
 
     Args:
       cls: The class to process
@@ -335,7 +405,7 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
     Notes:
       - Only processes fields that are subcommands
       - Skips fields named 'return'
-      - Only adds defaults if not already present
+      - Uses _make_optional_field() to create default values
     """
     hints = t.get_type_hints(cls)
 
@@ -348,8 +418,9 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
     """
     Parse command line arguments into a dictionary of values.
 
-    Creates an ArgumentParser, adds all arguments from the class fields,
-    and parses the provided arguments into a format suitable for class instantiation.
+    This function creates an ArgumentParser, adds all arguments from the class
+    fields, and parses the provided arguments into a format suitable for class
+    instantiation.
 
     Args:
       cls: The class containing field definitions
@@ -363,9 +434,18 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
       - Preserves type information and defaults
       - Skips 'return' fields
       - Processes nested subcommands recursively
+
+    Example:
+      @app
+      class MyApp:
+        name: str
+        count: int = option(short=True)
+
+      # Parsing arguments
+      values = parse(MyApp, ['--name', 'test', '-c', '42'])
+      # Returns: {'name': 'test', 'count': 42}
     """
     parser = ArgumentParser(**kwargs)
-
     result: t.Dict[str, t.Any] = {}
 
     for field_name, field_info in cls.__dataclass_fields__.items():
@@ -385,11 +465,11 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
       if field_name == 'return':
         continue
 
-      field_type, default = t.get_type_hints(cls)[field_name], _get_field_default_value(field_info)
+      field_type = t.get_type_hints(cls)[field_name]
+      default = _get_field_default_value(field_info)
 
       if _is_subcommand(field_type):
         instance = _build_subcommand_instance(field_type, parsed_args, field_name)
-
         if instance is not None:
           result[field_name] = instance
         elif default is not MISSING:
@@ -403,11 +483,45 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
 
   @classmethod
   def from_args(cls: t.Type[T]) -> T:
+    """
+    Create a class instance from command line arguments (sys.argv).
+
+    This classmethod creates an instance of the class by parsing command
+    line arguments from sys.argv.
+
+    Returns:
+      An instance of the class with values from command line arguments
+
+    Example:
+      instance = MyApp.from_args()  # Parses from sys.argv
+    """
     return cls(**parse(cls))
 
   @classmethod
   def from_iter(cls: t.Type[T], args: list) -> T:
-    return cls(**parse(cls, args))
+    """
+    Create a class instance from a list of arguments.
+
+    This classmethod creates an instance of the class by parsing a provided
+    list of arguments.
+
+    Args:
+      args: List of command line arguments to parse
+
+    Returns:
+      An instance of the class with values from the arguments
+
+    Example:
+      instance = MyApp.from_iter(['--name', 'test'])
+    """
+    parsed = parse(cls, args)
+
+    # Add None for any missing subcommand fields
+    for name, _ in cls.__dataclass_fields__.items():
+      if name not in parsed and _is_subcommand(t.get_type_hints(cls)[name]):
+        parsed[name] = None
+
+    return cls(**parsed)
 
   if not hasattr(cls, '__dataclass_fields__'):
     cls = dataclass(cls)
@@ -490,19 +604,57 @@ def app(cls=None, *args, **kwargs):
 
 def subcommand(cls: t.Optional[t.Type[T]] = None) -> t.Type[T]:
   """
-  Decorator to mark a class as a CLI subcommand.
+  Decorator to mark a class as a CLI subcommand with inheritance support.
 
-  Transforms a nested class into a subcommand, similar to how Git uses 'commit'
-  in 'git commit'. Subcommands can be nested to create complex command hierarchies.
+  This decorator transforms a Python class into a subcommand that can be used
+  within a CLI application. It handles inheritance of fields and options from
+  parent classes, and configures the class for use in command hierarchies.
 
   Args:
-    cls: The class to transform into a subcommand
+    cls:
+      The class to transform into a subcommand. If None, returns a wrapper
+       function for use with parameters.
 
   Returns:
     The processed class with subcommand capabilities
+
+  Raises:
+    TypeError: If applied to a non-class object
+
+  Notes:
+    - Supports class inheritance, preserving fields and options from parent classes
+    - Automatically converts the class to a dataclass if it isn't one already
+    - Handles nested subcommands (subcommands that have their own subcommands)
+    - Makes all subcommand fields optional by default
   """
 
   def wrap(cls: t.Type[T]) -> t.Type[T]:
+    """
+    Inner wrapper function that performs the actual class transformation.
+
+    This function:
+    1. Processes inherited fields from parent classes
+    2. Marks the class as a subcommand
+    3. Processes type hints for nested subcommands
+    4. Converts the class to a dataclass if needed
+
+    Args:
+      cls: The class to process
+
+    Returns:
+      The processed class with all subcommand functionality added
+
+    Notes:
+      - Preserves existing field values when inheriting from parent classes
+      - Ensures all subcommand fields are optional with None defaults
+      - Maintains proper dataclass functionality and initialization
+    """
+    inherited_fields = _process_inherited_fields(cls)
+
+    for name, field_info in inherited_fields.items():
+      if not hasattr(cls, name):
+        setattr(cls, name, field_info)
+
     setattr(cls, '_is_subcommand', True)
 
     hints = t.get_type_hints(cls)
@@ -510,12 +662,9 @@ def subcommand(cls: t.Optional[t.Type[T]] = None) -> t.Type[T]:
     for name, hint in hints.items():
       if name == 'return':
         continue
-
-      if hasattr(cls, name):
-        continue
-
       if _is_subcommand(hint):
-        setattr(cls, name, _make_optional_field())
+        if not hasattr(cls, name):
+          setattr(cls, name, _make_optional_field())
 
     if not hasattr(cls, '__dataclass_fields__'):
       cls = dataclass(cls)
