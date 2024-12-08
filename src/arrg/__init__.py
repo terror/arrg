@@ -1,3 +1,4 @@
+import sys
 import typing as t
 from argparse import ArgumentParser, Namespace, _SubParsersAction
 from dataclasses import MISSING, Field, dataclass, field
@@ -414,7 +415,7 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
         if not hasattr(cls, name):
           setattr(cls, name, _make_optional_field())
 
-  def parse(cls: t.Type[T], args: list = []) -> t.Dict[str, t.Any]:
+  def parse(cls: t.Type[T], args: list | None = None) -> t.Dict[str, t.Any]:
     """
     Parse command line arguments into a dictionary of values.
 
@@ -445,6 +446,9 @@ def _process_app(cls: t.Type[T], *args: t.Any, **kwargs: t.Any) -> t.Type[T]:
       values = parse(MyApp, ['--name', 'test', '-c', '42'])
       # Returns: {'name': 'test', 'count': 42}
     """
+    if args is None:
+      args = sys.argv[1:]
+
     parser = ArgumentParser(**kwargs)
     result: t.Dict[str, t.Any] = {}
 

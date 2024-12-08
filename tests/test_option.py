@@ -115,3 +115,14 @@ def test_required_option():
 
   with pytest.raises(SystemExit):
     Arguments.from_iter([])
+
+
+def test_command_line_args(capsys, monkeypatch):
+  monkeypatch.setattr('sys.argv', ['script.py', 'test_input'])
+
+  @app
+  class Arguments:
+    input: str
+
+  result = Arguments.from_args()
+  assert result.input == 'test_input'
