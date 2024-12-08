@@ -10,4 +10,5 @@ class Arguments:
 
 
 if __name__ == '__main__':
+  # uv run simple_option.py foo
   Arguments.from_args().run()
