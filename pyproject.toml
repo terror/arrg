@@ -36,8 +36,8 @@ quote-style = "single"
 
 [tool.uv]
 dev-dependencies = [
-    "pytest-mock>=3.14.0",
-    "pytest>=8.3.3",
-    "ruff>=0.7.3",
-    "isort>=5.13.2",
+  "pytest-mock>=3.14.0",
+  "pytest>=8.3.3",
+  "ruff>=0.7.3",
+  "isort>=5.13.2",
 ]
