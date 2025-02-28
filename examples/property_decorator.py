@@ -1,11 +1,11 @@
-from arrg import app, option
+from arrg import app, argument
 
 
 @app
 class Arguments:
   @property
   def count(self) -> int:
-    return option('--count', type=int, default=1)
+    return argument('--count', type=int, default=1)
 
   def double_count(self):
     return self.count * 2

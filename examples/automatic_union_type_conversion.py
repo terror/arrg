@@ -1,11 +1,11 @@
 import typing as t
 
-from arrg import app, option
+from arrg import app, argument
 
 
 @app
 class Arguments:
-  input: t.Union[int, str] = option('--input')
+  input: t.Union[int, str] = argument('--input')
 
   def run(self):
     print(self.input)

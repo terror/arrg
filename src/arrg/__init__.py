@@ -3,7 +3,7 @@ import typing as t
 from dataclasses import dataclass, is_dataclass
 from dataclasses import field as dataclass_field
 
-from .option import Option
+from .argument import Argument
 from .parser import Parser
 
 R = t.TypeVar('R')
@@ -64,9 +64,9 @@ def app(cls: t.Type[R]) -> t.Type[AppProtocol[R]]:
   return t.cast(t.Type[AppProtocol[R]], App)
 
 
-def option(*name_or_flags: str, **kwargs: t.Any) -> t.Any:
+def argument(*name_or_flags: str, **kwargs: t.Any) -> t.Any:
   return dataclass_field(
-    default=kwargs.get('default', None), metadata={'option': Option(*name_or_flags, **kwargs)}
+    default=kwargs.get('default', None), metadata={'argument': Argument(*name_or_flags, **kwargs)}
   )
 
 
@@ -79,4 +79,4 @@ def subcommand(cls: t.Type[R]) -> t.Type[R]:
   return cls
 
 
-__all__ = ['app', 'option', 'subcommand']
+__all__ = ['app', 'argument', 'subcommand']

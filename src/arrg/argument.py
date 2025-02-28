@@ -2,7 +2,7 @@ import argparse
 import typing as t
 
 
-class Option:
+class Argument:
   def __init__(
     self,
     *name_or_flags: str,
@@ -33,7 +33,15 @@ class Option:
     self.version = version
     self.kwargs = kwargs
 
-  def _kwargs(self):
+  @property
+  def positional(self) -> bool:
+    return (
+      True
+      if not self.name_or_flags
+      else not any(flag.startswith('-') for flag in self.name_or_flags)
+    )
+
+  def resolve_kwargs(self):
     kwargs = {}
 
     for attribute, value in vars(self).items():
