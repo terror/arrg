@@ -101,7 +101,7 @@ def _build_parser(cls) -> ArgumentParser:
   # If `option` is present in this fields metadata we should
   # add it as an option, otherwise add it as a positional argument.
   for field_name, field_type in t.get_type_hints(cls).items():
-    field = cls.__dataclass_fields__.get(field_name)
+    field = getattr(cls, '__dataclass_fields__').get(field_name)
 
     if field and 'option' in field.metadata:
       _add_option(field_name, field_type, field.metadata['option'])
@@ -122,22 +122,24 @@ def _build_parser(cls) -> ArgumentParser:
   #     return option('--count', default=0)
   # ```
   #
-  # The goal here is to essentially override the existing `count` property
+  # The goal here is to essentially override the existing `count` return value
   # with the value parsed from the command-line arguments via `argparse`.
-  for member_name, property in getmembers(cls, isdatadescriptor):
-    if member_name in cls.__dataclass_fields__:
+  #
+  # We achieve this by creating a temporary instance of the class and evaluating
+  # the property, then adding it as an option if it has the `option` metadata. Then
+  # later we can override the value with the parsed value.
+  for member_name, member_value in getmembers(cls, isdatadescriptor):
+    if member_name in getattr(cls, '__dataclass_fields__'):
       continue
 
-    if hasattr(property, '__get__'):
+    if hasattr(member_value, '__get__'):
       try:
-        temp_instance = cls(**{field_name: None for field_name in cls.__dataclass_fields__})
+        field = getattr(cls(), member_name)
 
-        property = getattr(temp_instance, member_name)
-
-        if 'option' in property.metadata:
-          _add_option(member_name, property.default.__class__, property.metadata['option'])
+        if 'option' in field.metadata:
+          _add_option(member_name, field.default.__class__, field.metadata['option'])
       except Exception:
-        # Skip properties that don't return an option or can't be evaluated
+        # Skip properties that don't return an option or can't be evaluated.
         pass
 
   return parser
@@ -171,6 +173,7 @@ def _resolve_type(field_type: t.Any) -> t.Callable:
 
       if type(None) in args:
         non_none_args = [arg for arg in args if arg is not type(None)]
+
         if non_none_args:
           return _resolve_type(non_none_args[0])
 
@@ -200,14 +203,17 @@ def app(cls: t.Type[R]) -> t.Type[AppProtocol[R]]:
       for name in [name for name in parsed_args if name not in getattr(cls, '__dataclass_fields__')]
     }
 
-    instance = App(cls(**parsed_args), property_values)
+    app_instance = App(cls(**parsed_args), property_values)
 
-    # Copy methods from original class to this new instance
+    # Copy methods from original class to this new instance.
+    #
+    # When methods are called on this new instance, we want them to reference
+    # `self` on the `App` wrapper instance, not the original class instance.
     for name, attr in cls.__dict__.items():
       if callable(attr) and not name.startswith('__') and not isinstance(attr, property):
-        setattr(instance, name, types.MethodType(attr, instance))
+        setattr(app_instance, name, types.MethodType(attr, app_instance))
 
-    return instance
+    return app_instance
 
   class App:
     def __init__(self, instance, property_overrides=None):
@@ -228,7 +234,7 @@ def app(cls: t.Type[R]) -> t.Type[AppProtocol[R]]:
     def from_iter(args: t.Sequence[str]) -> 'App':
       return initialize(args)
 
-  App.__name__ = cls.__name__
+  setattr(App, '__name__', getattr(cls, '__name__'))
 
   return t.cast(t.Type[AppProtocol[R]], App)
 
@@ -249,6 +255,8 @@ def option(*name_or_flags: str, **kwargs: t.Any) -> t.Any:
 def subcommand(cls: t.Type[R]) -> t.Type[R]:
   if not is_dataclass(cls):
     cls = dataclass(cls)
+
+  setattr(cls, '__subcommand__', True)
 
   return cls
 
