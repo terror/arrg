@@ -346,7 +346,21 @@ def test_combining_with_other_decorators():
   assert additional_method()
 
 
-def test_union_type_conversion_int_str():
+def test_positional_union_type_conversion_int_str():
+  @app
+  class Arguments:
+    input: t.Union[int, str]
+
+  result = Arguments.from_iter(['1'])
+  assert isinstance(result.input, int)
+  assert result.input == 1
+
+  result = Arguments.from_iter(['test'])
+  assert isinstance(result.input, str)
+  assert result.input == 'test'
+
+
+def test_optional_union_type_conversion_int_str():
   @app
   class Arguments:
     input: t.Union[int, str] = option('--input')

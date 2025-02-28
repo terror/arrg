@@ -13,5 +13,5 @@ class Arguments:
 
 if __name__ == '__main__':
   # `uv run examples/automatic_union_type_conversion.py --value foo` works,
-  # and `self.input` will be a `str`.
+  # and `input` will be a `str`.
   Arguments.from_args().run()
