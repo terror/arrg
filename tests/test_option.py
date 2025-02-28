@@ -37,13 +37,11 @@ def test_default_values():
     verbose: bool = option('--verbose', action='store_true', default=False)
 
   result = Arguments.from_iter([])
-
   assert result.name == 'default_name'
   assert result.count == 42
   assert not result.verbose
 
   result = Arguments.from_iter(['--name', 'custom', '--count', '10', '--verbose'])
-
   assert result.name == 'custom'
   assert result.count == 10
   assert result.verbose
@@ -57,7 +55,6 @@ def test_multiple_options():
     verbose: bool = option('-v', '--verbose', action='store_true')
 
   result = Arguments.from_iter(['-i', 'input.txt', '-o', 'output.txt', '--verbose'])
-
   assert result.input == 'input.txt'
   assert result.output == 'output.txt'
   assert result.verbose
@@ -71,7 +68,6 @@ def test_mixed_positional_and_options():
     recursive: bool = option('-r', action='store_true')
 
   result = Arguments.from_iter(['src_dir', '--destination', 'dest_dir', '-r'])
-
   assert result.source == 'src_dir'
   assert result.destination == 'dest_dir'
   assert result.recursive
@@ -83,7 +79,6 @@ def test_list_type_option():
     files: list[str] = option('--files')
 
   result = Arguments.from_iter(['--files', 'file1.txt', 'file2.txt', 'file3.txt'])
-
   assert result.files == ['file1.txt', 'file2.txt', 'file3.txt']
 
 
@@ -93,7 +88,6 @@ def test_choices_option():
     mode: str = option('--mode', choices=['read', 'write', 'append'])
 
   result = Arguments.from_iter(['--mode', 'write'])
-
   assert result.mode == 'write'
 
   with pytest.raises(SystemExit):
@@ -117,7 +111,6 @@ def test_command_line_args(monkeypatch):
     input: str
 
   result = Arguments.from_args()
-
   assert result.input == 'test_input'
 
 
@@ -128,12 +121,10 @@ def test_optional_type():
     count: t.Optional[int] = option('--count', type=int)
 
   result = Arguments.from_iter(['--name', 'test', '--count', '5'])
-
   assert result.name == 'test'
   assert result.count == 5
 
   result = Arguments.from_iter([])
-
   assert result.name is None
   assert result.count is None
 
@@ -148,7 +139,6 @@ def test_custom_type_converter():
     config: tuple = option('--config', type=parse_key_value)
 
   result = Arguments.from_iter(['--config', 'server=localhost'])
-
   assert result.config == ('server', 'localhost')
 
 
@@ -169,7 +159,6 @@ def test_nested_dataclass():
     server: ServerConfig = option('--server', type=parse_server_config)
 
   result = Arguments.from_iter(['--server', 'localhost:8080'])
-
   assert result.server.host == 'localhost'
   assert result.server.port == 8080
 
@@ -191,7 +180,12 @@ def test_methods_get_preserved():
     def get_count(self):
       return self.count
 
-  assert Arguments.from_iter(['--count', '5']).get_count() == 5
+    def double_count(self):
+      return self.count * 2
+
+  result = Arguments.from_iter(['--count', '5'])
+  assert result.get_count() == 5
+  assert result.double_count() == 10
 
 
 def test_class_name_is_preserved():
@@ -200,3 +194,67 @@ def test_class_name_is_preserved():
     pass
 
   assert CustomArguments.__name__ == 'CustomArguments'
+
+
+def test_at_property_decorators():
+  @app
+  class Arguments:
+    @property
+    def count(self):
+      return option('--count', '-c', type=int, default=42)
+
+  assert Arguments.from_iter(['--count', '5']).count == 5
+
+
+def test_property_with_default():
+  @app
+  class Arguments:
+    @property
+    def verbose(self):
+      return option('--verbose', action='store_true', default=False)
+
+  result = Arguments.from_iter([])
+  assert not result.verbose
+
+  result = Arguments.from_iter(['--verbose'])
+  assert result.verbose
+
+
+def test_multiple_properties():
+  @app
+  class Arguments:
+    @property
+    def input(self):
+      return option('-i', '--input', default='default.txt')
+
+    @property
+    def count(self):
+      return option('-c', '--count', type=int, default=1)
+
+    @property
+    def verbose(self):
+      return option('-v', '--verbose', action='store_true')
+
+  result = Arguments.from_iter(['-i', 'test.txt', '-c', '10', '-v'])
+  assert result.input == 'test.txt'
+  assert result.count == 10
+  assert result.verbose
+
+
+def test_methods_with_properties():
+  @app
+  class Arguments:
+    @property
+    def count(self) -> int:
+      return option('--count', type=int, default=1)
+
+    def double_count(self):
+      return self.count * 2
+
+    def triple_count(self):
+      return self.count * 3
+
+  result = Arguments.from_iter(['--count', '5'])
+  assert result.count == 5
+  assert result.double_count() == 10
+  assert result.triple_count() == 15
