@@ -16,6 +16,12 @@ Simply install the package via the Python package manager `pip`.
 $ pip install arrg
 ```
 
+...or if you're more hip, add it to your project with [uv](https://docs.astral.sh/uv/):
+
+```bash
+$ uv add arrg
+```
+
 ### Usage
 
 Below is a very simple example demonstrating the usage of the `app` decorator.

@@ -29,7 +29,7 @@ def test_short_option():
   assert Arguments.from_iter(['-i', 'test']).input == 'test'
 
 
-def test_default_values():
+def test_setting_default_values():
   @app
   class Arguments:
     name: str = option('--name', default='default_name')
@@ -78,8 +78,11 @@ def test_list_type_option():
   class Arguments:
     files: list[str] = option('--files')
 
-  result = Arguments.from_iter(['--files', 'file1.txt', 'file2.txt', 'file3.txt'])
-  assert result.files == ['file1.txt', 'file2.txt', 'file3.txt']
+  result = Arguments.from_iter([])
+  assert result.files == []
+
+  result = Arguments.from_iter(['--files', 'a.txt', 'b.txt', 'c.txt'])
+  assert result.files == ['a.txt', 'b.txt', 'c.txt']
 
 
 def test_choices_option():
@@ -228,12 +231,14 @@ def test_multiple_properties():
       return option('-i', '--input', default='default.txt')
 
     @property
-    def count(self):
-      return option('-c', '--count', type=int, default=1)
+    def count(self) -> int:
+      return option('-c', '--count', default=1)
 
     @property
-    def verbose(self):
-      return option('-v', '--verbose', action='store_true')
+    def verbose(
+      self,
+    ) -> bool:  # Because we set this type annotation here, we default the action to `store_true`.
+      return option('-v', '--verbose')
 
   result = Arguments.from_iter(['-i', 'test.txt', '-c', '10', '-v'])
   assert result.input == 'test.txt'
@@ -321,3 +326,33 @@ def test_infer_default_value_for_list():
 
   result = Arguments.from_iter([])
   assert result.input == []
+
+
+def test_combining_with_other_decorators():
+  def add_method(cls):
+    cls.additional_method = lambda _: True
+    return cls
+
+  @app
+  @add_method
+  class Arguments:
+    input: str
+
+  result = Arguments.from_iter(['test'])
+  assert result.input == 'test'
+
+  additional_method = getattr(result, 'additional_method', None)
+  assert callable(additional_method)
+  assert additional_method()
+
+
+def test_union_type_annotation():
+  @app
+  class Arguments:
+    input: t.Union[int, str] = option('--value')
+
+  result = Arguments.from_iter(['--value', '1'])
+  assert result.input == 1
+
+  result = Arguments.from_iter(['--value', 'test'])
+  assert result.input == 'test'
