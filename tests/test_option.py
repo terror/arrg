@@ -29,6 +29,15 @@ def test_short_option():
   assert Arguments.from_iter(['-i', 'test']).input == 'test'
 
 
+def test_option_name_defaults_to_field_name():
+  @app
+  class Arguments:
+    name: str = option()
+
+  result = Arguments.from_iter(['--name', 'hello'])
+  assert result.name == 'hello'
+
+
 def test_setting_default_values():
   @app
   class Arguments:

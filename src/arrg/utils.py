@@ -1,7 +1,7 @@
 import typing as t
 
 
-def infer_default_value(field_type: t.Callable) -> t.Any:
+def infer_default_value(field_type: t.Any) -> t.Any:
   match field_type:
     case _ if field_type is bool:
       return False
