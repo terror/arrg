@@ -1,6 +1,6 @@
 ## arrg
 
-<div align='right'>
+<div align='left'>
  <img width='10%' src='https://oldschool.runescape.wiki/images/Arrg.png?2e0cb'/>
 </div>
 
