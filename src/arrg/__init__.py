@@ -1,6 +1,6 @@
 import types
 import typing as t
-from argparse import Action, ArgumentParser
+from argparse import Action, ArgumentParser, Namespace
 from dataclasses import dataclass, is_dataclass
 from dataclasses import field as dataclass_field
 from inspect import getmembers, isdatadescriptor
@@ -49,7 +49,7 @@ class Option:
     self.version = version
     self.kwargs = kwargs
 
-  def keyword_arguments(self):
+  def _kwargs(self):
     kwargs = {}
 
     for attribute, value in vars(self).items():
@@ -66,17 +66,21 @@ class Option:
     return kwargs
 
 
-def _build_parser(cls) -> ArgumentParser:
-  parser = ArgumentParser(description=f'{cls.__name__} command-line interface')
+class Parser:
+  def __init__(self, description: str):
+    self._argument_parser = ArgumentParser(description=description)
+    self._optional_arguments = []
 
-  def _add_positional(field_name: str, field_type: t.Any):
-    parser.add_argument(field_name, type=_resolve_type(field_type))
+  def add_optional_argument(self, field_name: str, field_type: t.Any, option: Option) -> None:
+    kwargs = option._kwargs()
 
-  def _add_option(field_name: str, field_type: t.Any, option: Option):
-    kwargs = option.keyword_arguments()
+    resolved_type = _resolve_type(field_type)
 
     if 'type' not in kwargs and field_type is not bool:
-      kwargs['type'] = _resolve_type(field_type)
+      kwargs['type'] = resolved_type
+
+    if 'default' not in kwargs:
+      kwargs['default'] = _infer_default_value(resolved_type)
 
     if get_origin(field_type) is list and 'nargs' not in kwargs:
       kwargs['nargs'] = '+'
@@ -85,9 +89,21 @@ def _build_parser(cls) -> ArgumentParser:
       kwargs['dest'] = field_name
 
     if option.name_or_flags:
-      parser.add_argument(*option.name_or_flags, **kwargs)
+      self._argument_parser.add_argument(*option.name_or_flags, **kwargs)
     else:
-      parser.add_argument(f'--{field_name}', **kwargs)
+      self._argument_parser.add_argument(f'--{field_name}', **kwargs)
+
+    self._optional_arguments.append(field_name)
+
+  def add_positional_argument(self, field_name: str, field_type: t.Any) -> None:
+    self._argument_parser.add_argument(field_name, type=_resolve_type(field_type))
+
+  def parse_args(self, args: t.Sequence[str] | None) -> Namespace:
+    return self._argument_parser.parse_args(args=args)
+
+
+def _build_parser(cls) -> Parser:
+  parser = Parser(description=f'{cls.__name__} command-line interface')
 
   # Process regular dataclass fields, i.e.
   #
@@ -104,9 +120,9 @@ def _build_parser(cls) -> ArgumentParser:
     field = getattr(cls, '__dataclass_fields__').get(field_name)
 
     if field and 'option' in field.metadata:
-      _add_option(field_name, field_type, field.metadata['option'])
+      parser.add_optional_argument(field_name, field_type, field.metadata['option'])
     else:
-      _add_positional(field_name, field_type)
+      parser.add_positional_argument(field_name, field_type)
 
   # Process properties that are not part of the regular dataclass fields.
   #
@@ -134,15 +150,35 @@ def _build_parser(cls) -> ArgumentParser:
 
     if hasattr(member_value, '__get__'):
       try:
-        field = getattr(cls(), member_name)
+        field = getattr(
+          cls(**{field_name: None for field_name in cls.__dataclass_fields__}), member_name
+        )
 
         if 'option' in field.metadata:
-          _add_option(member_name, field.default.__class__, field.metadata['option'])
+          parser.add_optional_argument(
+            member_name, field.default.__class__, field.metadata['option']
+          )
       except Exception:
         # Skip properties that don't return an option or can't be evaluated.
         pass
 
   return parser
+
+
+def _infer_default_value(field_type: t.Callable) -> t.Any:
+  match field_type:
+    case _ if field_type is bool:
+      return False
+    case _ if field_type is int:
+      return 0
+    case _ if field_type is float:
+      return 0.0
+    case _ if field_type is str:
+      return ''
+    case _ if field_type is list:
+      return []
+    case _:
+      return None
 
 
 def _resolve_type(field_type: t.Any) -> t.Callable:
@@ -185,6 +221,12 @@ def _resolve_type(field_type: t.Any) -> t.Callable:
     case _ if field_type is bool:
       return bool
 
+    case _ if field_type is int:
+      return int
+
+    case _ if field_type is float:
+      return float
+
     case _:
       return str
 
@@ -196,33 +238,33 @@ def app(cls: t.Type[R]) -> t.Type[AppProtocol[R]]:
   def initialize(args: t.Sequence[str] | None) -> 'App':
     parser = _build_parser(cls)
 
-    parsed_args = vars(parser.parse_args(args=args))
+    parsed_args = vars(parser.parse_args(args))
 
-    property_values = {
-      name: parsed_args.pop(name)
-      for name in [name for name in parsed_args if name not in getattr(cls, '__dataclass_fields__')]
-    }
+    # This is required so that we replace each attribute with its resolved value
+    # from the command-line arguments. The new `App` instance will reference this
+    # value instead of the original value.
+    attribute_overrides = {name: parsed_args.pop(name) for name in parser._optional_arguments}
 
-    app_instance = App(cls(**parsed_args), property_values)
+    app_instance = App(cls(**parsed_args), attribute_overrides)
 
     # Copy methods from original class to this new instance.
     #
     # When methods are called on this new instance, we want them to reference
     # `self` on the `App` wrapper instance, not the original class instance.
     for name, attr in cls.__dict__.items():
-      if callable(attr) and not name.startswith('__') and not isinstance(attr, property):
+      if callable(attr):
         setattr(app_instance, name, types.MethodType(attr, app_instance))
 
     return app_instance
 
   class App:
-    def __init__(self, instance, property_overrides=None):
+    def __init__(self, instance, attribute_overrides=None):
       self._instance = instance
-      self._property_overrides = property_overrides or {}
+      self._attribute_overrides = attribute_overrides or {}
 
     def __getattr__(self, name):
-      if name in self._property_overrides:
-        return self._property_overrides[name]
+      if name in self._attribute_overrides:
+        return self._attribute_overrides[name]
 
       return getattr(self._instance, name)
 

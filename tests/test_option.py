@@ -125,8 +125,8 @@ def test_optional_type():
   assert result.count == 5
 
   result = Arguments.from_iter([])
-  assert result.name is None
-  assert result.count is None
+  assert result.name == ''
+  assert result.count == 0
 
 
 def test_custom_type_converter():
@@ -258,3 +258,66 @@ def test_methods_with_properties():
   assert result.count == 5
   assert result.double_count() == 10
   assert result.triple_count() == 15
+
+
+def test_mixed_options():
+  @app
+  class Arguments:
+    input: str
+    count: int = option('--count', default=0)
+
+    @property
+    def multiplier(self) -> int:
+      return option('--multiplier', default=1)
+
+    def value(self):
+      return self.count * self.multiplier
+
+  result = Arguments.from_iter(['foo', '--count', '5', '--multiplier', '2'])
+  assert result.input == 'foo'
+  assert result.value() == 10
+
+
+def test_infer_default_value_for_int():
+  @app
+  class Arguments:
+    input: int = option('--input')
+
+  result = Arguments.from_iter([])
+  assert result.input == 0
+
+
+def test_infer_default_value_for_str():
+  @app
+  class Arguments:
+    input: str = option('--input')
+
+  result = Arguments.from_iter([])
+  assert result.input == ''
+
+
+def test_infer_default_value_for_float():
+  @app
+  class Arguments:
+    input: float = option('--input')
+
+  result = Arguments.from_iter([])
+  assert result.input == 0.0
+
+
+def test_infer_default_value_for_bool():
+  @app
+  class Arguments:
+    input: bool = option('--input')
+
+  result = Arguments.from_iter([])
+  assert not result.input
+
+
+def test_infer_default_value_for_list():
+  @app
+  class Arguments:
+    input: list = option('--input')
+
+  result = Arguments.from_iter([])
+  assert result.input == []
