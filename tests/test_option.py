@@ -346,13 +346,15 @@ def test_combining_with_other_decorators():
   assert additional_method()
 
 
-def test_union_type_annotation():
+def test_union_type_conversion_int_str():
   @app
   class Arguments:
-    input: t.Union[int, str] = option('--value')
+    input: t.Union[int, str] = option('--input')
 
-  result = Arguments.from_iter(['--value', '1'])
+  result = Arguments.from_iter(['--input', '1'])
+  assert isinstance(result.input, int)
   assert result.input == 1
 
-  result = Arguments.from_iter(['--value', 'test'])
+  result = Arguments.from_iter(['--input', 'test'])
+  assert isinstance(result.input, str)
   assert result.input == 'test'
