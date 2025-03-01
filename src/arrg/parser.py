@@ -12,31 +12,68 @@ R = t.TypeVar('R')
 
 
 class Parser:
-  def __init__(self, description: str):
+  def __init__(self, **parser_kwargs: t.Any):
+    """
+    Initialize a Parser with ArgumentParser parameters.
+
+    Args:
+      **parser_kwargs: All kwargs accepted by argparse.ArgumentParser
+    """
+    self._exit_on_error = parser_kwargs.pop('exit_on_error', True)
     self._override_field_names: t.List[str] = []
-    self._parser = argparse.ArgumentParser(description=description)
-    self._subcommand_parsers = {}
+    self._parser: argparse.ArgumentParser = argparse.ArgumentParser(**parser_kwargs)
+    self._subcommand_parsers: t.Dict[str, argparse.ArgumentParser] = {}
     self._subparsers: t.Optional[argparse._SubParsersAction] = None
 
   @staticmethod
-  def from_instance(instance: t.Type[R]) -> 'Parser':
-    parser = Parser(description=f'{instance.__name__} command-line interface')
+  def from_instance(instance: t.Type[R], **parser_kwargs: t.Any) -> 'Parser':
+    """
+    Create a parser from a class instance.
+
+    Args:
+      instance: Class to create a parser for
+      **parser_kwargs: All kwargs accepted by argparse.ArgumentParser
+
+    Returns:
+      Configured parser
+    """
+    # Use class name as default description if not provided
+    if 'description' not in parser_kwargs:
+      parser_kwargs['description'] = f'{instance.__name__} command-line interface'
+
+    parser = Parser(**parser_kwargs)
     parser._process_class(instance, parser._parser)
+
     return parser
 
-  def parse_args(self, args=None) -> t.Dict[str, t.Any]:
+  def parse_args(
+    self, args: t.Optional[t.Union[str, t.Sequence[str]]] = None
+  ) -> t.Dict[str, t.Any]:
     """Parse command line arguments and return a dictionary of parsed values."""
     if args is None:
       args = sys.argv[1:]
     elif isinstance(args, str):
       args = shlex.split(args)
 
-    if self._subparsers is None:
-      temp_ns = argparse.Namespace()
-      self._parser.parse_args(args, temp_ns)
-      return vars(temp_ns)
+    if not self._exit_on_error:
+      try:
+        if self._subparsers is None:
+          temp_ns = argparse.Namespace()
+          self._parser.parse_args(args, temp_ns)
+          return vars(temp_ns)
 
-    return self._parse_level(self._subparsers, args)
+        return self._parse_level(self._subparsers, args)
+      except SystemExit as e:
+        error_code = e.code if isinstance(e.code, int) else 1
+        error_msg = f'Argument parsing error with code {error_code}'
+        raise argparse.ArgumentError(None, error_msg) from e
+    else:
+      if self._subparsers is None:
+        temp_ns = argparse.Namespace()
+        self._parser.parse_args(args, temp_ns)
+        return vars(temp_ns)
+
+      return self._parse_level(self._subparsers, args)
 
   def _process_class(self, cls: t.Type, parser: argparse.ArgumentParser) -> None:
     """Process a class's fields and properties for arguments."""
@@ -52,8 +89,6 @@ class Parser:
         self._process_subcommand_field(field_name, field_type, parser)
       elif field and 'argument' in field.metadata:
         self._add_argument(field_name, field_type, field.metadata['argument'], parser=parser)
-      else:
-        parser.add_argument(field_name, type=resolve_type(field_type))
 
   def _process_subcommand_field(
     self, field_name: str, field_type: t.Type, parser: argparse.ArgumentParser
@@ -148,7 +183,7 @@ class Parser:
     if t.get_origin(field_type) is list and 'nargs' not in kwargs:
       kwargs['nargs'] = '+'
 
-    if 'default' not in kwargs:
+    if 'default' not in kwargs and not getattr(self._parser, 'argument_default'):
       kwargs['default'] = infer_default_value(field_type)
 
     if 'dest' not in kwargs and not argument.positional:

@@ -8,7 +8,7 @@ from arrg import app, argument
 def test_positional():
   @app
   class Arguments:
-    input: str
+    input: str = argument()
 
   assert Arguments.from_iter(['test']).input == 'test'
 
@@ -72,7 +72,7 @@ def test_multiple_arguments():
 def test_mixed_positional_and_arguments():
   @app
   class Arguments:
-    source: str  # positional
+    source: str = argument()  # positional
     destination: str = argument('--destination')
     recursive: bool = argument('-r', action='store_true')
 
@@ -120,7 +120,7 @@ def test_command_line_args(monkeypatch):
 
   @app
   class Arguments:
-    input: str
+    input: str = argument()
 
   result = Arguments.from_args()
   assert result.input == 'test_input'
@@ -277,7 +277,7 @@ def test_methods_with_properties():
 def test_mixed_arguments():
   @app
   class Arguments:
-    input: str
+    input: str = argument()
     count: int = argument('--count', default=0)
 
     @property
@@ -345,7 +345,7 @@ def test_combining_with_other_decorators():
   @app
   @add_method
   class Arguments:
-    input: str
+    input: str = argument()
 
   result = Arguments.from_iter(['test'])
   assert result.input == 'test'
@@ -358,7 +358,7 @@ def test_combining_with_other_decorators():
 def test_positional_union_type_conversion_int_str():
   @app
   class Arguments:
-    input: t.Union[int, str]
+    input: t.Union[int, str] = argument()
 
   result = Arguments.from_iter(['1'])
   assert isinstance(result.input, int)

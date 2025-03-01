@@ -27,11 +27,11 @@ $ uv add arrg
 Below is a very simple example demonstrating the usage of the `app` decorator.
 
 ```python
-from arrg import app
+from arrg import app, argument
 
-@app
+@app(description="A wonderful command-line interface")
 class Arguments:
-  input: str
+  input: str = argument()
 
   def run(self):
     print(self.input)

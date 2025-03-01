@@ -157,7 +157,7 @@ class TestIntegration:
 
     @app
     class Arguments:
-      pos_arg: str
+      pos_arg: str = argument()
       int_arg: int = argument('--int-arg')
       float_arg: float = argument('--float-arg')
       bool_arg: bool = argument('--bool-arg')

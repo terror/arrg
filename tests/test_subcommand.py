@@ -22,7 +22,7 @@ def test_basic_subcommand():
 def test_nested_subcommands():
   @subcommand
   class Remove:
-    name: str
+    name: str = argument()
 
   @subcommand
   class Remote:
@@ -86,7 +86,7 @@ def test_subcommand_help_text(capsys):
 def test_subcommand_with_positional_args():
   @subcommand
   class Clone:
-    repository: str
+    repository: str = argument()
     destination: str = argument('--destination')
 
   @app
