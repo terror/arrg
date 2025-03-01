@@ -10,7 +10,7 @@ Heavily inspired by the Rust crate
 
 ### Installation
 
-Simply install the package via the Python package manager `pip`.
+Simply install the package via the Python package manager [pip](https://pip.pypa.io/en/stable/installation/).
 
 ```bash
 $ pip install arrg
