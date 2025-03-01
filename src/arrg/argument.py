@@ -41,7 +41,7 @@ class Argument:
       else not any(flag.startswith('-') for flag in self.name_or_flags)
     )
 
-  def resolve_kwargs(self):
+  def resolve_kwargs(self) -> t.Dict[str, t.Any]:
     kwargs = {}
 
     for attribute, value in vars(self).items():

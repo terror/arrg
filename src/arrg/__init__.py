@@ -30,31 +30,26 @@ def app(cls: t.Type[R]) -> t.Type[AppProtocol[R]]:
 
     parsed_args = parser.parse_args(args)
 
-    # Process the parsed arguments to create the app instance
     instance_args, overrides = _process_parsed_args(cls, parsed_args, parser._override_field_names)
     app_instance = App(cls(**instance_args), overrides)
 
-    # Attach methods from the original class to the app instance
     _attach_methods(cls, app_instance)
 
     return app_instance
 
-  def _process_parsed_args(cls_type, parsed_args, override_fields):
+  def _process_parsed_args(
+    cls_type: t.Type, parsed_args: t.Dict[str, t.Any], override_fields: t.List[str]
+  ) -> t.Tuple[t.Dict[str, t.Any], t.Dict[str, t.Any]]:
     """
     Process parsed arguments and separate regular args from overrides and subcommands.
     Returns a tuple of (args_for_instantiation, override_values).
     """
-    instance_args = {}
-    subcommand_args = {}
-    overrides = {}
+    instance_args, subcommand_args, overrides = {}, {}, {}
 
-    # Separate arguments into different categories
     for name, value in list(parsed_args.items()):
       if isinstance(value, dict) and name in cls_type.__annotations__:
-        # This is a subcommand
         subcommand_args[name] = value
       else:
-        # This is a regular argument or override
         if name in override_fields:
           overrides[name] = parsed_args.pop(name)
         else:
@@ -67,31 +62,29 @@ def app(cls: t.Type[R]) -> t.Type[AppProtocol[R]]:
         instance_args[name] = None
         continue
 
-      # Process nested subcommands
-      subcommand_instance = _process_subcommand(subcommand_type, args_dict)
-      instance_args[name] = subcommand_instance
+      instance_args[name] = _process_subcommand(subcommand_type, args_dict)
 
     return instance_args, overrides
 
-  def _process_subcommand(subcommand_type, args_dict):
+  def _process_subcommand(subcommand_type: t.Type, args_dict: t.Dict[str, t.Any]) -> t.Any:
     """Process a subcommand and its nested subcommands."""
     nested_subcommands = {}
 
-    for subname, subvalue in list(args_dict.items()):
-      if isinstance(subvalue, dict) and subname in subcommand_type.__annotations__:
-        nested_subcommands[subname] = subvalue
+    for name, value in list(args_dict.items()):
+      if isinstance(value, dict) and name in subcommand_type.__annotations__:
+        nested_subcommands[name] = value
 
     subcommand_instance = subcommand_type(**args_dict)
 
-    for subname, subargs in nested_subcommands.items():
+    for name, subargs in nested_subcommands.items():
       if subargs:  # Skip if the subcommand wasn't provided
-        subtype = subcommand_type.__annotations__[subname]
+        subtype = subcommand_type.__annotations__[name]
         nested_instance = _process_subcommand(subtype, subargs)
-        setattr(subcommand_instance, subname, nested_instance)
+        setattr(subcommand_instance, name, nested_instance)
 
     return subcommand_instance
 
-  def _attach_methods(cls_type, app_instance):
+  def _attach_methods(cls_type: t.Type, app_instance: 'App') -> None:
     """Attach methods from the original class to the app instance."""
     for name, attr in cls_type.__dict__.items():
       if callable(attr):
@@ -100,11 +93,11 @@ def app(cls: t.Type[R]) -> t.Type[AppProtocol[R]]:
   class App:
     """Application instance wrapper that handles attribute overrides."""
 
-    def __init__(self, instance, overrides=None):
-      self._instance = instance
-      self._overrides = overrides or {}
+    def __init__(self, instance: R, overrides: t.Optional[t.Dict[str, t.Any]] = None):
+      self._instance: R = instance
+      self._overrides: t.Dict[str, t.Any] = overrides or {}
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str):
       if name in self._overrides:
         return self._overrides[name]
       return getattr(self._instance, name)
