@@ -131,17 +131,17 @@ def app(
       """Process a subcommand and its nested subcommands."""
       nested_subcommands: t.Dict[str, t.Dict[str, t.Any]] = {}
 
-      for name, value in list(args_dict.items()):
-        if isinstance(value, dict) and name in subcommand_type.__annotations__:
-          nested_subcommands[name] = value
+      for subcommand_name, value in list(args_dict.items()):
+        if isinstance(value, dict) and subcommand_name in subcommand_type.__annotations__:
+          nested_subcommands[subcommand_name] = value
 
       subcommand_instance = subcommand_type(**args_dict)
 
-      for name, subargs in nested_subcommands.items():
-        if subargs:  # Skip if the subcommand wasn't provided
-          subtype = subcommand_type.__annotations__[name]
-          nested_instance = _process_subcommand(subtype, subargs)
-          setattr(subcommand_instance, name, nested_instance)
+      for subcommand_name, subcommand_args in nested_subcommands.items():
+        if subcommand_args:  # Skip if the subcommand wasn't provided
+          subcommand_type = subcommand_type.__annotations__[subcommand_name]
+          nested_instance = _process_subcommand(subcommand_type, subcommand_args)
+          setattr(subcommand_instance, subcommand_name, nested_instance)
 
       return subcommand_instance
 

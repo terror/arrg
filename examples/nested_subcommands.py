@@ -3,7 +3,7 @@ from arrg import app, argument, subcommand
 
 @subcommand
 class Backup:
-  path: str  # positional argument for what to backup
+  path: str = argument()  # positional argument for what to backup
   compress: bool = argument('-c', help='Compress the backup')
 
   def run(self):

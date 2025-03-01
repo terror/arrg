@@ -1,9 +1,9 @@
-from arrg import app
+from arrg import app, argument
 
 
 @app
 class Arguments:
-  input: str
+  input: str = argument()
 
   def run(self):
     print(self.input)

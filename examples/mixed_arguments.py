@@ -3,7 +3,7 @@ from arrg import app, argument
 
 @app
 class Arguments:
-  input: str  # This is a required positional argument.
+  input: str = argument()  # This is a required positional argument.
 
   # This is an optional argument, defaults to 0 (inferred from type).
   count: int = argument('--count')
