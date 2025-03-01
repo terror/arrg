@@ -13,12 +13,6 @@ R = t.TypeVar('R')
 
 class Parser:
   def __init__(self, **parser_kwargs: t.Any):
-    """
-    Initialize a Parser with ArgumentParser parameters.
-
-    Args:
-      **parser_kwargs: All kwargs accepted by argparse.ArgumentParser
-    """
     self._exit_on_error = parser_kwargs.pop('exit_on_error', True)
     self._override_field_names: t.List[str] = []
     self._parser: argparse.ArgumentParser = argparse.ArgumentParser(**parser_kwargs)
@@ -27,17 +21,6 @@ class Parser:
 
   @staticmethod
   def from_instance(instance: t.Type[R], **parser_kwargs: t.Any) -> 'Parser':
-    """
-    Create a parser from a class instance.
-
-    Args:
-      instance: Class to create a parser for
-      **parser_kwargs: All kwargs accepted by argparse.ArgumentParser
-
-    Returns:
-      Configured parser
-    """
-    # Use class name as default description if not provided
     if 'description' not in parser_kwargs:
       parser_kwargs['description'] = f'{instance.__name__} command-line interface'
 
@@ -64,9 +47,9 @@ class Parser:
 
         return self._parse_level(self._subparsers, args)
       except SystemExit as e:
-        error_code = e.code if isinstance(e.code, int) else 1
-        error_msg = f'Argument parsing error with code {error_code}'
-        raise argparse.ArgumentError(None, error_msg) from e
+        raise argparse.ArgumentError(
+          None, f'Argument parsing error with code {e.code if isinstance(e.code, int) else 1}'
+        ) from e
     else:
       if self._subparsers is None:
         temp_ns = argparse.Namespace()
@@ -76,24 +59,72 @@ class Parser:
       return self._parse_level(self._subparsers, args)
 
   def _process_class(self, cls: t.Type, parser: argparse.ArgumentParser) -> None:
-    """Process a class's fields and properties for arguments."""
-    self._process_fields(cls, parser)
-    self._process_properties(cls, parser)
+    """Process a class's fields and properties for arguments, including inherited ones."""
+    if not hasattr(parser, '_processed_fields'):
+      setattr(parser, '_processed_fields', set())
+
+    # Get all classes in the inheritance hierarchy (excluding object)
+    classes_to_process = [c for c in cls.__mro__ if c is not object]
+
+    # Process from base classes to derived classes (reversed MRO)
+    for current_cls in reversed(classes_to_process):
+      self._process_fields(current_cls, parser)
+      self._process_properties(current_cls, parser)
 
   def _process_fields(self, cls: t.Type, parser: argparse.ArgumentParser) -> None:
-    """Process the fields of a class."""
-    for field_name, field_type in t.get_type_hints(cls).items():
-      field = getattr(cls, '__dataclass_fields__', {}).get(field_name)
+    """Process the fields of a class, including all annotations."""
+    # Ensure we have a set to track processed fields
+    if not hasattr(parser, '_processed_fields'):
+      setattr(parser, '_processed_fields', set())
 
+    processed_fields = getattr(parser, '_processed_fields')
+
+    # Get annotations for current class
+    annotations = getattr(cls, '__annotations__', {})
+
+    for field_name, field_type in annotations.items():
+      # Skip already processed fields
+      if field_name in processed_fields:
+        continue
+
+      # Check if this is a subcommand field
       if hasattr(field_type, '__subcommand__'):
         self._process_subcommand_field(field_name, field_type, parser)
-      elif field and 'argument' in field.metadata:
-        self._add_argument(field_name, field_type, field.metadata['argument'], parser=parser)
+        processed_fields.add(field_name)
+        continue
+
+      # Check if this is an Optional[SubcommandType]
+      origin = t.get_origin(field_type)
+      args = t.get_args(field_type)
+      if origin is t.Union and args and type(None) in args:
+        # Get the non-None type from Union
+        for arg in args:
+          if arg is not type(None) and hasattr(arg, '__subcommand__'):
+            self._process_subcommand_field(field_name, arg, parser)
+            processed_fields.add(field_name)
+            continue
+
+      # Try to get the field value directly from the class
+      field_value = getattr(cls, field_name, None)
+
+      # If it's a properly defined argument field
+      if field_value and hasattr(field_value, 'metadata') and 'argument' in field_value.metadata:
+        self._add_argument(field_name, field_type, field_value.metadata['argument'], parser=parser)
+        processed_fields.add(field_name)
+        continue
+
+      # If we have a dataclass field
+      if hasattr(cls, '__dataclass_fields__') and field_name in cls.__dataclass_fields__:
+        field = cls.__dataclass_fields__[field_name]
+        if 'argument' in field.metadata:
+          self._add_argument(field_name, field_type, field.metadata['argument'], parser=parser)
+          processed_fields.add(field_name)
 
   def _process_subcommand_field(
     self, field_name: str, field_type: t.Type, parser: argparse.ArgumentParser
   ) -> None:
     """Process a subcommand field."""
+    # Create subparsers for the parent parser if they don't exist yet
     if parser is self._parser and self._subparsers is None:
       self._subparsers = parser.add_subparsers(title='subcommands')
 
@@ -107,6 +138,7 @@ class Parser:
     if parser is self._parser:
       self._subcommand_parsers[field_name] = subparser
 
+    # Here we recursively process the subcommand class
     self._process_class(field_type, subparser)
 
   def _process_properties(self, cls: t.Type, parser: argparse.ArgumentParser) -> None:
@@ -128,17 +160,13 @@ class Parser:
 
           argument = field.metadata['argument']
 
-          field_type = (
-            argument.type
-            or t.get_type_hints(
-              getattr(getattr(member_value, 'fget'), '__func__', getattr(member_value, 'fget'))
-            ).get('return')
-            or field.default.__class__
-          )
+          member_return_type = t.get_type_hints(
+            getattr(getattr(member_value, 'fget'), '__func__', getattr(member_value, 'fget'))
+          ).get('return')
 
           self._add_argument(
             member_name,
-            field_type,
+            argument.type or member_return_type or field.default.__class__,
             argument,
             parser=parser,
           )
