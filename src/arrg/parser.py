@@ -5,7 +5,8 @@ import typing as t
 from collections import defaultdict
 
 from .argument import Argument
-from .utils import get_subcommand_type, is_subcommand_type, resolve_type
+from .type_resolver import resolve_type
+from .utils import get_subcommand_type, is_subcommand_type
 
 R = t.TypeVar('R')
 

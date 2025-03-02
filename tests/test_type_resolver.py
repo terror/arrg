@@ -1,6 +1,6 @@
 import typing as t
 
-from arrg.utils import (
+from arrg.type_resolver import (
   _create_union_converter,
   _resolve_bool_from_string,
   _resolve_list_type,
