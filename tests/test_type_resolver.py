@@ -1,178 +1,389 @@
+import datetime
+import ipaddress
+import pathlib
+import re
 import typing as t
+import uuid
+from decimal import Decimal
+from enum import Enum, auto
 
-from arrg.type_resolver import (
-  _create_union_converter,
-  _resolve_bool_from_string,
-  _resolve_list_type,
-  _resolve_union_type,
-  resolve_type,
-)
+import pytest
 
-
-class TestResolveBoolFromString:
-  def test_true_values(self):
-    for value in ('true', 'True', 'TRUE', 't', 'yes', 'y', '1'):
-      assert _resolve_bool_from_string(value) is True
-
-  def test_false_values(self):
-    for value in ('false', 'False', 'FALSE', 'f', 'no', 'n', '0'):
-      assert _resolve_bool_from_string(value) is False
-
-  def test_invalid_values(self):
-    for value in ('not_a_bool', '2', 'maybe'):
-      assert _resolve_bool_from_string(value) is None
+from arrg.type_resolver import TypeResolver
 
 
-class TestCreateUnionConverter:
-  def test_int_str_conversion(self):
-    converter = _create_union_converter([int, str])
-
-    assert converter('42') == 42
-    assert isinstance(converter('42'), int)
-
-    assert converter('hello') == 'hello'
-    assert isinstance(converter('hello'), str)
-
-  def test_bool_int_str_conversion(self):
-    converter = _create_union_converter([bool, int, str])
-
-    assert converter('true') is True
-    assert converter('false') is False
-    assert converter('42') == 42
-    assert converter('hello') == 'hello'
-
-  def test_fallback_to_string(self):
-    class NonConvertible:
-      pass
-
-    converter = _create_union_converter([NonConvertible])
-    assert converter('test') == 'test'
+class Color(Enum):
+  RED = 'red'
+  GREEN = 'green'
+  BLUE = 'blue'
 
 
-class TestResolveListType:
-  def test_typed_list(self):
-    resolver = _resolve_list_type(t.List[int])
-    assert resolver('42') == 42
-    assert isinstance(resolver('42'), int)
-
-  def test_untyped_list(self):
-    resolver = _resolve_list_type(t.List[t.Any])
-    assert resolver('42') == '42'
-    assert isinstance(resolver('42'), str)
-
-  def test_nested_list(self):
-    resolver = _resolve_list_type(t.List[t.List[int]])
-    assert resolver('42') == 42
+class Status(Enum):
+  PENDING = 1
+  ACTIVE = 2
+  COMPLETED = 3
 
 
-class TestResolveUnionType:
-  def test_optional_type(self):
-    resolver = _resolve_union_type(t.Optional[int])
-    assert resolver('42') == 42
-    assert isinstance(resolver('42'), int)
-
-  def test_union_of_primitives(self):
-    resolver = _resolve_union_type(t.Union[int, str])
-
-    assert resolver('42') == 42
-    assert resolver('hello') == 'hello'
-
-  def test_empty_union(self):
-    resolver = _resolve_union_type(t.Union[t.Any])
-    assert resolver('test') == 'test'
-    assert isinstance(resolver('test'), str)
-
-  def test_none_only_union(self):
-    resolver = _resolve_union_type(t.Union[type(None)])
-    assert resolver('test') == 'test'
+class AutoEnum(Enum):
+  ONE = auto()
+  TWO = auto()
+  THREE = auto()
 
 
-class TestResolveType:
-  def test_primitive_types(self):
-    assert resolve_type(bool)('true') is True
-    assert resolve_type(int)('42') == 42
-    assert resolve_type(float)('3.14') == 3.14
-    assert resolve_type(str)('hello') == 'hello'
+def test_bool_conversion():
+  resolver = TypeResolver.resolve(bool)
 
-  def test_list_types(self):
-    list_converter = resolve_type(t.List[int])
-    assert list_converter('42') == 42
-
-  def test_union_types(self):
-    union_converter = resolve_type(t.Union[int, str])
-    assert union_converter('42') == 42
-    assert union_converter('hello') == 'hello'
-
-  def test_class_types(self):
-    class CustomType:
-      def __init__(self, value):
-        self.value = value
-
-    assert resolve_type(CustomType) is CustomType
+  assert resolver('') is False
+  assert resolver('true') is True
+  assert resolver(0) is False
+  assert resolver(1) is True
+  assert resolver(False) is False
+  assert resolver(True) is True
 
 
-class TestIntegration:
-  def test_real_world_scenario(self):
-    from arrg import app, argument
+def test_int_conversion():
+  resolver = TypeResolver.resolve(int)
 
-    @app
-    class Arguments:
-      pos_arg: str = argument()
-      int_arg: int = argument('--int-arg')
-      float_arg: float = argument('--float-arg')
-      bool_arg: bool = argument('--bool-arg')
-      list_arg: t.List[str] = argument('--list-arg')
-      opt_arg: t.Optional[int] = argument('--opt-arg')
-      union_arg: t.Union[int, str] = argument('--union-arg')
+  assert resolver('42') == 42
+  assert resolver('-100') == -100
 
-    result = Arguments.from_iter(
-      [
-        'positional',
-        '--int-arg',
-        '42',
-        '--float-arg',
-        '3.14',
-        '--bool-arg',
-        '--list-arg',
-        'a',
-        'b',
-        'c',
-        '--opt-arg',
-        '100',
-        '--union-arg',
-        'string_val',
-      ]
-    )
+  with pytest.raises(ValueError):
+    resolver('not_an_int')
 
-    assert result.pos_arg == 'positional'
-    assert result.int_arg == 42
-    assert result.float_arg == 3.14
-    assert result.bool_arg is True
-    assert result.list_arg == ['a', 'b', 'c']
-    assert result.opt_arg == 100
-    assert result.union_arg == 'string_val'
 
-    result = Arguments.from_iter(['positional', '--union-arg', '123'])
-    assert result.union_arg == 123
-    assert isinstance(result.union_arg, int)
+def test_float_conversion():
+  resolver = TypeResolver.resolve(float)
 
-  def test_inferred_default_values(self):
-    from arrg import app, argument
+  assert resolver('3.14') == 3.14
+  assert resolver('-2.5') == -2.5
 
-    @app
-    class Arguments:
-      int_arg: int = argument('--int-arg')
-      float_arg: float = argument('--float-arg')
-      bool_arg: bool = argument('--bool-arg')
-      str_arg: str = argument('--str-arg')
-      list_arg: t.List[str] = argument('--list-arg')
-      opt_arg: t.Optional[int] = argument('--opt-arg')
+  with pytest.raises(ValueError):
+    resolver('not_a_float')
 
-    result = Arguments.from_iter([])
 
-    assert result.int_arg is None
-    assert result.float_arg is None
-    assert result.bool_arg is False
-    assert result.str_arg is None
-    assert result.list_arg is None
-    assert result.opt_arg is None
+def test_str_conversion():
+  resolver = TypeResolver.resolve(str)
+
+  assert resolver('hello') == 'hello'
+  assert resolver('42') == '42'
+
+
+def test_uuid_conversion():
+  resolver = TypeResolver.resolve(uuid.UUID)
+
+  uuid_str = '550e8400-e29b-41d4-a716-446655440000'
+
+  assert resolver(uuid_str) == uuid.UUID(uuid_str)
+
+  with pytest.raises(ValueError):
+    resolver('not_a_uuid')
+
+
+def test_date_conversion():
+  resolver = TypeResolver.resolve(datetime.date)
+
+  assert resolver('2023-01-15') == datetime.date(2023, 1, 15)
+
+  with pytest.raises(ValueError):
+    resolver('not_a_date')
+
+
+def test_time_conversion():
+  resolver = TypeResolver.resolve(datetime.time)
+
+  assert resolver('12:30:45') == datetime.time(12, 30, 45)
+
+  with pytest.raises(ValueError):
+    resolver('not_a_time')
+
+
+def test_path_conversion():
+  resolver = TypeResolver.resolve(pathlib.Path)
+
+  assert resolver('/tmp/file.txt') == pathlib.Path('/tmp/file.txt')
+
+
+def test_ipv4_conversion():
+  resolver = TypeResolver.resolve(ipaddress.IPv4Address)
+
+  assert resolver('192.168.1.1') == ipaddress.IPv4Address('192.168.1.1')
+
+  with pytest.raises(ValueError):
+    resolver('not_an_ip')
+
+
+def test_ipv6_conversion():
+  resolver = TypeResolver.resolve(ipaddress.IPv6Address)
+
+  assert resolver('::1') == ipaddress.IPv6Address('::1')
+
+  with pytest.raises(ValueError):
+    resolver('not_an_ip')
+
+
+def test_regex_pattern_conversion():
+  resolver = TypeResolver.resolve(re.Pattern)
+
+  pattern = resolver(r'\d+')
+
+  assert isinstance(pattern, re.Pattern)
+  assert pattern.match('123')
+  assert not pattern.match('abc')
+
+
+def test_list_type():
+  resolver = TypeResolver.resolve(t.List[int])
+
+  assert resolver('42') == 42
+
+  with pytest.raises(ValueError):
+    resolver('not_an_int')
+
+
+def test_list_with_complex_type():
+  resolver = TypeResolver.resolve(t.List[datetime.date])
+  assert resolver('2023-01-15') == datetime.date(2023, 1, 15)
+
+
+def test_dict_type():
+  resolver = TypeResolver.resolve(t.Dict[str, int])
+  assert resolver('answer=42') == {'answer': 42}
+
+  with pytest.raises(ValueError):
+    resolver('answer=not_an_int')
+
+
+def test_dict_with_complex_types():
+  resolver = TypeResolver.resolve(t.Dict[str, datetime.date])
+  assert resolver('date=2023-01-15') == {'date': datetime.date(2023, 1, 15)}
+
+
+def test_set_type():
+  resolver = TypeResolver.resolve(t.Set[int])
+  assert resolver('42') == 42
+
+
+def test_tuple_type():
+  resolver = TypeResolver.resolve(t.Tuple[str, int, float])
+  assert resolver('name,42,3.14') == ('name', 42, 3.14)
+
+  with pytest.raises(ValueError):
+    resolver('name,not_an_int,3.14')
+
+  with pytest.raises(ValueError):
+    resolver('only_one_value')
+
+
+def test_optional_int():
+  resolver = TypeResolver.resolve(t.Optional[int])
+  assert resolver('42') == 42
+  assert resolver(None) is None
+
+  with pytest.raises(ValueError):
+    resolver('not_an_int')
+
+
+def test_int_or_str():
+  resolver = TypeResolver.resolve(t.Union[int, str])
+
+  assert resolver('42') == 42
+  assert isinstance(resolver('42'), int)
+
+  assert resolver('hello') == 'hello'
+  assert isinstance(resolver('hello'), str)
+
+
+def test_complex_union():
+  resolver = TypeResolver.resolve(t.Union[int, float, datetime.date, str])
+
+  assert resolver('42') == 42
+  assert isinstance(resolver('42'), int)
+
+  assert resolver('3.14') == 3.14
+  assert isinstance(resolver('3.14'), float)
+
+  assert resolver('2023-01-15') == datetime.date(2023, 1, 15)
+  assert isinstance(resolver('2023-01-15'), datetime.date)
+
+  assert resolver('hello') == 'hello'
+  assert isinstance(resolver('hello'), str)
+
+
+def test_literal_strings():
+  resolver = TypeResolver.resolve(t.Literal['red', 'green', 'blue'])
+
+  assert resolver('red') == 'red'
+  assert resolver('green') == 'green'
+  assert resolver('blue') == 'blue'
+
+  with pytest.raises(ValueError):
+    resolver('yellow')
+
+
+def test_enum_by_name():
+  resolver = TypeResolver.resolve(Color)
+
+  assert resolver('RED') == Color.RED
+  assert resolver('GREEN') == Color.GREEN
+  assert resolver('BLUE') == Color.BLUE
+
+  with pytest.raises(ValueError):
+    resolver('YELLOW')
+
+
+def test_enum_by_value():
+  resolver = TypeResolver.resolve(Status)
+
+  assert resolver('1') == Status.PENDING
+  assert resolver('2') == Status.ACTIVE
+  assert resolver('3') == Status.COMPLETED
+
+  with pytest.raises(ValueError):
+    resolver('4')
+
+
+def test_auto_enum():
+  resolver = TypeResolver.resolve(AutoEnum)
+
+  assert resolver('ONE') == AutoEnum.ONE
+  assert resolver('TWO') == AutoEnum.TWO
+  assert resolver('THREE') == AutoEnum.THREE
+
+  with pytest.raises(ValueError):
+    resolver('FOUR')
+
+
+def test_all():
+  test_types = [
+    str,
+    int,
+    float,
+    bool,
+    datetime.date,
+    uuid.UUID,
+    pathlib.Path,
+    t.List[str],
+    t.Dict[str, int],
+    t.Union[int, str],
+    t.Optional[int],
+    Color,
+    Status,
+    t.Literal['read', 'write', 'append'],
+  ]
+
+  for field_type in test_types:
+    resolver = TypeResolver.resolve(field_type)
+    assert callable(resolver), f'Failed to get resolver for {field_type}'
+
+
+def test_union_bool_int():
+  resolver = TypeResolver.resolve(t.Union[bool, int])
+
+  assert resolver('true') is True
+  assert resolver('false') is False
+  assert resolver('yes') is True
+  assert resolver('no') is False
+  assert resolver('42') == 42
+  assert resolver('-10') == -10
+  assert resolver('1') is True  # '1' is a valid bool string, so it should convert to True
+  assert resolver('0') is False  # '0' is a valid bool string, so it should convert to False
+
+
+def test_union_int_bool():
+  resolver = TypeResolver.resolve(t.Union[int, bool])
+
+  assert resolver('42') == 42
+  assert resolver('-10') == -10
+
+  assert resolver('1') == 1
+  assert resolver('0') == 0
+
+  assert resolver('true') is True
+  assert resolver('false') is False
+
+
+def test_union_float_int_str():
+  resolver = TypeResolver.resolve(t.Union[float, int, str])
+
+  assert resolver('3.14') == 3.14
+  assert isinstance(resolver('3.14'), float)
+
+  assert resolver('42') == 42.0
+  assert isinstance(resolver('42'), float)
+
+  assert resolver('hello') == 'hello'
+  assert isinstance(resolver('hello'), str)
+
+
+def test_union_with_none():
+  resolver = TypeResolver.resolve(t.Union[int, None])
+
+  assert resolver('42') == 42
+  assert resolver(None) is None
+
+
+def test_union_with_enum():
+  resolver = TypeResolver.resolve(t.Union[Color, int])
+
+  assert resolver('RED') == Color.RED
+  assert resolver('42') == 42
+  assert resolver('1') == 1  # Not a valid Color name
+
+
+def test_union_nested():
+  inner_union = t.Union[int, float]
+  resolver = TypeResolver.resolve(t.Union[inner_union, str])
+
+  assert resolver('42') == 42
+  assert isinstance(resolver('42'), int)
+
+  assert resolver('3.14') == 3.14
+  assert isinstance(resolver('3.14'), float)
+
+  assert resolver('hello') == 'hello'
+  assert isinstance(resolver('hello'), str)
+
+
+def test_union_with_numeric_types():
+  resolver = TypeResolver.resolve(t.Union[int, float, Decimal, str])
+
+  assert resolver('42') == 42
+  assert isinstance(resolver('42'), int)
+
+  assert resolver('3.14') == 3.14
+  assert isinstance(resolver('3.14'), float)
+
+  assert resolver('hello') == 'hello'
+  assert isinstance(resolver('hello'), str)
+
+
+def test_union_with_path_and_str():
+  resolver = TypeResolver.resolve(t.Union[pathlib.Path, str])
+
+  result = resolver('/tmp/file.txt')
+  assert isinstance(result, pathlib.Path)
+  assert result == pathlib.Path('/tmp/file.txt')
+
+  result = resolver('hello')
+  assert isinstance(result, pathlib.Path)
+  assert result == pathlib.Path('hello')
+
+
+def test_union_with_str_and_path():
+  resolver = TypeResolver.resolve(t.Union[str, pathlib.Path])
+
+  result = resolver('/tmp/file.txt')
+  assert isinstance(result, str)
+  assert result == '/tmp/file.txt'
+
+  result = resolver('hello')
+  assert isinstance(result, str)
+  assert result == 'hello'
+
+
+def test_union_with_ip_addresses():
+  resolver = TypeResolver.resolve(t.Union[ipaddress.IPv4Address, ipaddress.IPv6Address, str])
+
+  assert resolver('192.168.1.1') == ipaddress.IPv4Address('192.168.1.1')
+  assert resolver('::1') == ipaddress.IPv6Address('::1')
+  assert resolver('hello') == 'hello'

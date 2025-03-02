@@ -9,7 +9,7 @@ class Add:
     print(sum(self.numbers))
 
 
-@app
+@app(description='Simple calculator')
 class Calculator:
   add: Add
 

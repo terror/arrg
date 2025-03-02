@@ -3,7 +3,7 @@ from arrg import app, argument, subcommand
 
 @subcommand
 class Backup:
-  path: str = argument()  # positional argument for what to backup
+  path: str = argument()
   compress: bool = argument('-c', help='Compress the backup')
 
   def run(self):
@@ -17,7 +17,7 @@ class Remote:
   verbose: bool = argument('-v', help='Show detailed output')
 
 
-@subcommand
+@subcommand(help='List backups')
 class List:
   all: bool = argument('-a', help='Show all backups including old ones')
 
@@ -26,15 +26,16 @@ class List:
     print(f'Listing {scope} backups')
 
 
-@app
-class BackupTool:
-  remote: Remote
+@app(description='Backup and restore files')
+class Arguments:
   list: List
+  remote: Remote
 
   def run(self):
-    if self.list is not None:
+    if self.list:
       self.list.run()
-    elif self.remote is not None:
+
+    if self.remote:
       if self.remote.verbose:
         print('Running backup in verbose mode')
 
@@ -42,4 +43,4 @@ class BackupTool:
 
 
 if __name__ == '__main__':
-  BackupTool.from_args().run()
+  Arguments.from_args().run()

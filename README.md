@@ -5,21 +5,19 @@
 </div>
 
 **arrg** is a Python library for building modular command-line applications.
-Heavily inspired by the Rust crate
-[`structopt`](https://github.com/TeXitoi/structopt).
 
 ### Installation
 
-Simply install the package via the Python package manager [pip](https://pip.pypa.io/en/stable/installation/).
+Simply install the package via the Python package manager [pip](https://pip.pypa.io/en/stable/installation/):
 
 ```bash
-$ pip install arrg
+pip install arrg
 ```
 
 ...or if you're more hip, add it to your project with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-$ uv add arrg
+uv add arrg
 ```
 
 ### Usage

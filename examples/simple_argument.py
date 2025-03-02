@@ -1,7 +1,7 @@
 from arrg import app, argument
 
 
-@app
+@app(description='Simple argument example')
 class Arguments:
   input: str = argument()
 

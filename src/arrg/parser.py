@@ -5,7 +5,7 @@ import typing as t
 from collections import defaultdict
 
 from .argument import Argument
-from .type_resolver import resolve_type
+from .type_resolver import TypeResolver
 from .utils import get_subcommand_type, is_subcommand_type
 
 R = t.TypeVar('R')
@@ -147,7 +147,7 @@ class Parser:
   def _prepare_argument_kwargs(
     self, field_name: str, field_type: t.Any, argument: Argument, kwargs: t.Dict[str, t.Any]
   ) -> None:
-    resolved_type = resolve_type(field_type)
+    resolved_type = TypeResolver.resolve(field_type)
 
     if 'type' not in kwargs and resolved_type is not bool:
       kwargs['type'] = resolved_type
