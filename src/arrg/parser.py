@@ -6,7 +6,7 @@ from collections import defaultdict
 from inspect import getmembers, isdatadescriptor
 
 from .argument import Argument
-from .utils import infer_default_value, resolve_type
+from .utils import resolve_type
 
 R = t.TypeVar('R')
 
@@ -247,10 +247,6 @@ class Parser:
     # Special handling for list fields
     if t.get_origin(field_type) is list and 'nargs' not in kwargs:
       kwargs['nargs'] = '+'
-
-    # Add default if not provided
-    if 'default' not in kwargs and not getattr(self._parser, 'argument_default'):
-      kwargs['default'] = infer_default_value(field_type)
 
     # Set destination if not positional and not provided
     if 'dest' not in kwargs and not argument.positional:

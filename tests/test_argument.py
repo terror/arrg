@@ -88,7 +88,7 @@ def test_list_type_argument():
     files: list[str] = argument('--files')
 
   result = Arguments.from_iter([])
-  assert result.files == []
+  assert result.files is None
 
   result = Arguments.from_iter(['--files', 'a.txt', 'b.txt', 'c.txt'])
   assert result.files == ['a.txt', 'b.txt', 'c.txt']
@@ -130,15 +130,15 @@ def test_optional_type():
   @app
   class Arguments:
     name: t.Optional[str] = argument('--name')
-    count: t.Optional[int] = argument('--count', type=int)
+    count: t.Optional[int] = argument('--count')
 
   result = Arguments.from_iter(['--name', 'test', '--count', '5'])
   assert result.name == 'test'
   assert result.count == 5
 
   result = Arguments.from_iter([])
-  assert result.name == ''
-  assert result.count == 0
+  assert result.name is None
+  assert result.count is None
 
 
 def test_custom_type_converter():
@@ -290,51 +290,6 @@ def test_mixed_arguments():
   result = Arguments.from_iter(['foo', '--count', '5', '--multiplier', '2'])
   assert result.input == 'foo'
   assert result.value() == 10
-
-
-def test_infer_default_value_for_int():
-  @app
-  class Arguments:
-    input: int = argument('--input')
-
-  result = Arguments.from_iter([])
-  assert result.input == 0
-
-
-def test_infer_default_value_for_str():
-  @app
-  class Arguments:
-    input: str = argument('--input')
-
-  result = Arguments.from_iter([])
-  assert result.input == ''
-
-
-def test_infer_default_value_for_float():
-  @app
-  class Arguments:
-    input: float = argument('--input')
-
-  result = Arguments.from_iter([])
-  assert result.input == 0.0
-
-
-def test_infer_default_value_for_bool():
-  @app
-  class Arguments:
-    input: bool = argument('--input')
-
-  result = Arguments.from_iter([])
-  assert not result.input
-
-
-def test_infer_default_value_for_list():
-  @app
-  class Arguments:
-    input: list = argument('--input')
-
-  result = Arguments.from_iter([])
-  assert result.input == []
 
 
 def test_combining_with_other_decorators():

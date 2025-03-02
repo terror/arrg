@@ -1,38 +1,12 @@
 import typing as t
-from dataclasses import dataclass
 
 from arrg.utils import (
   _create_union_converter,
   _resolve_bool_from_string,
   _resolve_list_type,
   _resolve_union_type,
-  infer_default_value,
   resolve_type,
 )
-
-
-class TestInferDefaultValue:
-  def test_primitive_types(self):
-    assert infer_default_value(bool) is False
-    assert infer_default_value(int) == 0
-    assert infer_default_value(float) == 0.0
-    assert infer_default_value(str) == ''
-
-  def test_collection_types(self):
-    assert infer_default_value(list) == []
-    assert infer_default_value(t.List[int]) == []
-    assert infer_default_value(tuple) == ()
-
-  def test_union_types(self):
-    assert infer_default_value(t.Union[int, str]) is None  # TODO: Should this be 0?
-    assert infer_default_value(t.Optional[str]) == ''
-
-  def test_custom_types(self):
-    @dataclass
-    class CustomType:
-      value: int = 0
-
-    assert infer_default_value(CustomType) is None
 
 
 class TestResolveBoolFromString:
@@ -53,25 +27,18 @@ class TestCreateUnionConverter:
   def test_int_str_conversion(self):
     converter = _create_union_converter([int, str])
 
-    # Should convert to int when possible
     assert converter('42') == 42
     assert isinstance(converter('42'), int)
 
-    # Should leave as str when not an int
     assert converter('hello') == 'hello'
     assert isinstance(converter('hello'), str)
 
   def test_bool_int_str_conversion(self):
     converter = _create_union_converter([bool, int, str])
 
-    # Should convert to bool for boolean strings
     assert converter('true') is True
     assert converter('false') is False
-
-    # Should convert to int when possible
     assert converter('42') == 42
-
-    # Should leave as str for other values
     assert converter('hello') == 'hello'
 
   def test_fallback_to_string(self):
@@ -107,20 +74,15 @@ class TestResolveUnionType:
   def test_union_of_primitives(self):
     resolver = _resolve_union_type(t.Union[int, str])
 
-    # Should convert to int when possible
     assert resolver('42') == 42
-
-    # Should leave as str when not an int
     assert resolver('hello') == 'hello'
 
   def test_empty_union(self):
-    # This is an edge case, but should return a string converter
     resolver = _resolve_union_type(t.Union[t.Any])
     assert resolver('test') == 'test'
     assert isinstance(resolver('test'), str)
 
   def test_none_only_union(self):
-    # Another edge case, should return a string converter
     resolver = _resolve_union_type(t.Union[type(None)])
     assert resolver('test') == 'test'
 
@@ -133,12 +95,10 @@ class TestResolveType:
     assert resolve_type(str)('hello') == 'hello'
 
   def test_list_types(self):
-    # For a List[int], values should be converted to int
     list_converter = resolve_type(t.List[int])
     assert list_converter('42') == 42
 
   def test_union_types(self):
-    # For a Union[int, str], values should be converted to int when possible
     union_converter = resolve_type(t.Union[int, str])
     assert union_converter('42') == 42
     assert union_converter('hello') == 'hello'
@@ -210,9 +170,9 @@ class TestIntegration:
 
     result = Arguments.from_iter([])
 
-    assert result.int_arg == 0
-    assert result.float_arg == 0.0
+    assert result.int_arg is None
+    assert result.float_arg is None
     assert result.bool_arg is False
-    assert result.str_arg == ''
-    assert result.list_arg == []
-    assert result.opt_arg == 0
+    assert result.str_arg is None
+    assert result.list_arg is None
+    assert result.opt_arg is None

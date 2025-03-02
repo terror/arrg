@@ -14,32 +14,6 @@ BOOL_TRUE_VALUES = ('true', 't', 'yes', 'y', '1')
 BOOL_FALSE_VALUES = ('false', 'f', 'no', 'n', '0')
 
 
-def infer_default_value(field_type: t.Any) -> t.Any:
-  """Infer a default value for a given type."""
-  if field_type is bool:
-    return False
-
-  if field_type is int:
-    return 0
-
-  if field_type is float:
-    return 0.0
-
-  if field_type is str:
-    return ''
-
-  if field_type is list or t.get_origin(field_type) is list:
-    return []
-
-  if field_type is tuple:
-    return ()
-
-  if t.get_origin(field_type) is t.Union:
-    return infer_default_value(resolve_type(field_type))
-
-  return None
-
-
 def resolve_type(field_type: t.Any) -> t.Callable[[t.Any], t.Any]:
   """Determine the type conversion function for a given type."""
   if t.get_origin(field_type) is list:
