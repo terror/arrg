@@ -25,6 +25,30 @@ class AppProtocol(t.Protocol[T]):
   def from_iter(args: t.Sequence[str]) -> T: ...
 
 
+@t.overload
+def app(cls: t.Type[R]) -> t.Type[AppProtocol[R]]: ...
+
+
+@t.overload
+def app(
+  cls: None = None,
+  *,
+  prog: t.Optional[str] = None,
+  usage: t.Optional[str] = None,
+  description: t.Optional[str] = None,
+  epilog: t.Optional[str] = None,
+  parents: t.Optional[t.List[t.Any]] = None,
+  formatter_class: t.Optional[t.Type] = None,
+  prefix_chars: t.Optional[str] = None,
+  fromfile_prefix_chars: t.Optional[str] = None,
+  argument_default: t.Optional[t.Any] = None,
+  conflict_handler: t.Optional[str] = None,
+  add_help: bool = True,
+  allow_abbrev: bool = True,
+  exit_on_error: bool = True,
+) -> t.Callable[[t.Type[R]], t.Type[AppProtocol[R]]]: ...
+
+
 def app(
   cls: t.Optional[t.Type[R]] = None,
   *,
