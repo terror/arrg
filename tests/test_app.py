@@ -5,7 +5,7 @@ from io import StringIO
 
 import pytest
 
-from arrg import app, argument
+from arrg import app, argument, subcommand
 
 
 def test_app_with_description(capsys):
@@ -416,73 +416,44 @@ def test_original_class_name_is_preserved():
   assert CustomArguments.__name__ == 'CustomArguments'
 
 
-def test_property_decorator():
+def test_app_inheritance():
   @app
-  class Arguments:
-    @property
-    def count(self) -> int:
-      return argument('--count', '-c', default=0)
+  class A:
+    a: str = argument('--a')
 
-  assert Arguments.from_iter([]).count == 0
-
-  assert Arguments.from_iter(['--count', '5']).count == 5
-
-
-def test_multiple_property_decorators():
   @app
-  class Arguments:
-    @property
-    def input(self):
-      return argument('-i', '--input', default='default.txt')
+  class B(A):
+    b: str = argument('--b')
 
-    @property
-    def count(self) -> int:
-      return argument('-c', '--count', default=1)
+  result = B.from_iter(['--a', 'a', '--b', 'b'])
+  assert result.a == 'a'
+  assert result.b == 'b'
 
-    @property
-    def verbose(
-      self,
-    ) -> bool:
-      return argument('-v', '--verbose')
-
-  result = Arguments.from_iter(['-i', 'test.txt', '-c', '10', '-v'])
-  assert result.input == 'test.txt'
-  assert result.count == 10
-  assert result.verbose
+  result = B.from_iter([])
+  assert result.a is None
+  assert result.b is None
 
 
-def test_regular_methods_with_property_decorators():
+def test_app_inheritance_with_subcommands():
+  @subcommand
+  class C:
+    d: str = argument('--d')
+
   @app
-  class Arguments:
-    @property
-    def count(self) -> int:
-      return argument('--count', type=int, default=1)
+  class A:
+    a: str = argument('--a')
+    c: C
 
-    def double_count(self):
-      return self.count * 2
-
-    def triple_count(self):
-      return self.count * 3
-
-  result = Arguments.from_iter(['--count', '5'])
-  assert result.count == 5
-  assert result.double_count() == 10
-  assert result.triple_count() == 15
-
-
-def test_mixed_arguments():
   @app
-  class Arguments:
-    input: str = argument()
-    count: int = argument('--count', default=0)
+  class B(A):
+    b: str = argument('--b')
 
-    @property
-    def multiplier(self) -> int:
-      return argument('--multiplier', default=1)
+  result = B.from_iter([])
+  assert result.a is None
+  assert result.b is None
+  assert result.c is None
 
-    def value(self):
-      return self.count * self.multiplier
-
-  result = Arguments.from_iter(['foo', '--count', '5', '--multiplier', '2'])
-  assert result.input == 'foo'
-  assert result.value() == 10
+  result = B.from_iter(['--a', 'a', '--b', 'b', 'c', '--d', 'd'])
+  assert result.a == 'a'
+  assert result.b == 'b'
+  assert result.c.d == 'd'

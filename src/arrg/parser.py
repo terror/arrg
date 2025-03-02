@@ -3,10 +3,9 @@ import shlex
 import sys
 import typing as t
 from collections import defaultdict
-from inspect import getmembers, isdatadescriptor
 
 from .argument import Argument
-from .utils import resolve_type
+from .utils import get_subcommand_type, is_subcommand_type, resolve_type
 
 R = t.TypeVar('R')
 
@@ -85,21 +84,6 @@ class Parser:
 
     return parser.add_subparsers(title='subcommands')
 
-  def _get_subcommand_type(self, field_type: t.Type) -> t.Type:
-    if hasattr(field_type, '__subcommand__'):
-      return field_type
-
-    origin = t.get_origin(field_type)
-
-    if origin is t.Union:
-      args = t.get_args(field_type)
-
-      for arg in args:
-        if arg is not type(None) and hasattr(arg, '__subcommand__'):
-          return arg
-
-    return field_type
-
   def _get_subparsers_for_parser(self, parser: ArgParser) -> SubparsersAction:
     if parser is self._parser:
       if self._subparsers is None:
@@ -125,24 +109,6 @@ class Parser:
 
     return result
 
-  def _has_subcommand_argument(self, subparsers: SubparsersAction, args: t.Sequence[str]) -> bool:
-    return any(arg in subparsers.choices for arg in args)
-
-  def _is_subcommand_field(self, field_type: t.Type) -> bool:
-    if hasattr(field_type, '__subcommand__'):
-      return True
-
-    origin = t.get_origin(field_type)
-
-    if origin is t.Union:
-      args = t.get_args(field_type)
-
-      for arg in args:
-        if arg is not type(None) and hasattr(arg, '__subcommand__'):
-          return True
-
-    return False
-
   def _parse_simple(self, args: t.Sequence[str]) -> t.Dict[str, t.Any]:
     temp_ns = ArgNamespace()
     self._parser.parse_args(args, temp_ns)
@@ -153,9 +119,7 @@ class Parser:
 
     cmd_groups = self._group_arguments_by_command(args, cmd_choices)
 
-    temp_ns = ArgNamespace()
-    self._parser.parse_args(cmd_groups.get(None, []), temp_ns)
-    result = vars(temp_ns)
+    result = self._parse_simple(cmd_groups[None])
 
     for cmd in cmd_choices:
       result[cmd] = None
@@ -168,7 +132,7 @@ class Parser:
 
       subcmds = self._find_subparsers(cmd_parser)
 
-      if subcmds and self._has_subcommand_argument(subcmds, cmd_args):
+      if subcmds and any(arg in subcmds.choices for arg in cmd_args):
         cmd_dict = self._parse_level(subcmds, cmd_args)
       else:
         temp_ns = ArgNamespace()
@@ -228,7 +192,6 @@ class Parser:
 
     for current_cls in reversed(classes_to_process):
       self._process_fields(current_cls, parser)
-      self._process_properties(current_cls, parser)
 
   def _process_fields(self, cls: t.Type, parser: ArgParser) -> None:
     annotations = getattr(cls, '__annotations__', {})
@@ -237,49 +200,13 @@ class Parser:
       if field_name in self._processed_fields[parser]:
         continue
 
-      if self._is_subcommand_field(field_type):
-        actual_type = self._get_subcommand_type(field_type)
+      if is_subcommand_type(field_type):
+        actual_type = get_subcommand_type(field_type)
         self._process_subcommand_field(field_name, actual_type, parser)
         self._processed_fields[parser].add(field_name)
         continue
 
       self._process_argument_field(cls, field_name, field_type, parser)
-
-  def _process_properties(self, cls: t.Type, parser: ArgParser) -> None:
-    dataclass_fields = getattr(cls, '__dataclass_fields__', {})
-
-    for member_name, member_value in getmembers(cls, isdatadescriptor):
-      if member_name in dataclass_fields:
-        continue
-
-      if not hasattr(member_value, '__get__'):
-        continue
-
-      try:
-        temp_instance = cls(**{field_name: None for field_name in dataclass_fields})
-
-        field = getattr(temp_instance, member_name)
-
-        if not hasattr(field, 'metadata') or 'argument' not in field.metadata:
-          continue
-
-        argument = field.metadata['argument']
-
-        fget = getattr(member_value, 'fget')
-        fget_func = getattr(fget, '__func__', fget)
-
-        member_return_type = t.get_type_hints(fget_func).get('return')
-
-        self._add_argument(
-          member_name,
-          argument.type or member_return_type or field.default.__class__,
-          argument,
-          parser=parser,
-        )
-
-        self._override_field_names.append(member_name)
-      except Exception:
-        pass
 
   def _process_subcommand_field(
     self, field_name: str, field_type: t.Type, parser: ArgParser

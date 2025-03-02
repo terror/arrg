@@ -1,13 +1,20 @@
-import types
 import typing as t
-from dataclasses import dataclass, is_dataclass
+from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 
 from .argument import Argument
+from .constants import SUBCOMMAND_MARKER
 from .parser import Parser
+from .utils import get_subcommand_type, is_subcommand_type
 
 R = t.TypeVar('R')
 T = t.TypeVar('T', covariant=True)
+
+
+def _set_default_subcommands(cls: t.Any) -> None:
+  for field_name, field_type in getattr(cls, '__annotations__', {}).items():
+    if is_subcommand_type(field_type):
+      setattr(cls, field_name, None)
 
 
 class AppProtocol(t.Protocol[T]):
@@ -16,38 +23,6 @@ class AppProtocol(t.Protocol[T]):
 
   @staticmethod
   def from_iter(args: t.Sequence[str]) -> T: ...
-
-
-def _is_subcommand_type(field_type: t.Type) -> bool:
-  if hasattr(field_type, '__subcommand__'):
-    return True
-
-  origin = t.get_origin(field_type)
-
-  if origin is t.Union:
-    args = t.get_args(field_type)
-
-    for arg in args:
-      if arg is not type(None) and hasattr(arg, '__subcommand__'):
-        return True
-
-  return False
-
-
-def _get_actual_subcommand_type(field_type: t.Type) -> t.Type:
-  if hasattr(field_type, '__subcommand__'):
-    return field_type
-
-  origin = t.get_origin(field_type)
-
-  if origin is t.Union:
-    args = t.get_args(field_type)
-
-    for arg in args:
-      if arg is not type(None) and hasattr(arg, '__subcommand__'):
-        return arg
-
-  return field_type
 
 
 def app(
@@ -91,7 +66,7 @@ def app(
   Returns:
     A decorated class or a decorator function
   """
-  parser_params = {
+  parser_kwargs = {
     'prog': prog,
     'usage': usage,
     'description': description,
@@ -107,62 +82,79 @@ def app(
     'exit_on_error': exit_on_error,
   }
 
-  parser_params = {k: v for k, v in parser_params.items() if v is not None}
+  parser_kwargs = {k: v for k, v in parser_kwargs.items() if v is not None}
 
-  def decorator(cls_inner: t.Type[R]) -> t.Type[AppProtocol[R]]:
-    for base in cls_inner.__bases__:
-      if hasattr(base, '__subcommand__'):
-        setattr(cls_inner, '__subcommand__', True)
+  def decorator(cls: t.Type[R]) -> t.Type[AppProtocol[R]]:
+    _set_default_subcommands(cls)
 
-    if not is_dataclass(cls_inner):
-      cls_inner = dataclass(cls_inner)
+    cls = dataclass(cls)
 
-    def build_app(args: t.Optional[t.Sequence[str]]) -> 'App':
-      parser = Parser.from_instance(cls_inner, **parser_params)
+    class App(cls):
+      @staticmethod
+      def from_args() -> 'cls':
+        """Create an application instance from command-line arguments."""
+        return create_instance_from_args(None)
 
-      parsed_args = parser.parse_args(args)
+      @staticmethod
+      def from_iter(args: t.Sequence[str]) -> 'cls':
+        """Create an application instance from an iterable of arguments."""
+        return create_instance_from_args(args)
 
-      instance_args, overrides = _process_parsed_args(
-        cls_inner, parsed_args, parser._override_field_names
+    def create_instance_from_args(args: t.Optional[t.Sequence[str]]) -> 'cls':
+      parser = Parser.from_instance(cls, **parser_kwargs)
+
+      return cls(
+        **_process_parsed_args(
+          cls,
+          parser.parse_args(args),
+        )
       )
 
-      app_instance = App(cls_inner(**instance_args), overrides)
-
-      _attach_methods(cls_inner, app_instance)
-
-      return app_instance
-
     def _process_parsed_args(
-      cls_type: t.Type, parsed_args: t.Dict[str, t.Any], override_fields: t.List[str]
-    ) -> t.Tuple[t.Dict[str, t.Any], t.Dict[str, t.Any]]:
+      cls: t.Type,
+      parsed_args: t.Dict[str, t.Any],
+    ) -> t.Dict[str, t.Any]:
+      print(parsed_args)
       instance_args: t.Dict[str, t.Any] = {}
       subcommand_args: t.Dict[str, t.Dict[str, t.Any]] = {}
-      overrides: t.Dict[str, t.Any] = {}
 
       for name, value in list(parsed_args.items()):
-        if isinstance(value, dict) and name in cls_type.__annotations__:
+        if isinstance(value, dict):
           subcommand_args[name] = value
         else:
-          if name in override_fields:
-            overrides[name] = parsed_args.pop(name)
-          else:
-            instance_args[name] = value
+          instance_args[name] = value
+
+      def _find_subcommand(cls: t.Type, subcommand_name: str) -> t.Type | None:
+        for field_name, field_type in cls.__annotations__.items():
+          if field_name == subcommand_name and is_subcommand_type(field_type):
+            return field_type
+
+        for base in cls.__bases__:
+          subcommand_type = _find_subcommand(base, subcommand_name)
+
+          if subcommand_type is not None:
+            return subcommand_type
+
+        return None
 
       for name, args_dict in subcommand_args.items():
-        subcommand_type = cls_type.__annotations__[name]
+        subcommand_type = _find_subcommand(cls, name)
+
+        if subcommand_type is None:
+          continue
 
         if not args_dict:
           instance_args[name] = None
           continue
 
-        actual_type = _get_actual_subcommand_type(subcommand_type)
+        actual_type = get_subcommand_type(subcommand_type)
         instance_args[name] = _process_subcommand(actual_type, args_dict)
 
-      for name, field_type in cls_type.__annotations__.items():
-        if _is_subcommand_type(field_type) and name not in instance_args:
+      for name, field_type in cls.__annotations__.items():
+        if is_subcommand_type(field_type) and name not in instance_args:
           instance_args[name] = None
 
-      return instance_args, overrides
+      return instance_args
 
     def _process_subcommand(subcommand_type: t.Type, args_dict: t.Dict[str, t.Any]) -> t.Any:
       nested_subcommands: t.Dict[str, t.Dict[str, t.Any]] = {}
@@ -174,42 +166,15 @@ def app(
       subcommand_instance = subcommand_type(**args_dict)
 
       for subcommand_name, subcommand_args in nested_subcommands.items():
-        if subcommand_args:  # Skip if the subcommand wasn't provided
+        if subcommand_args:
           annotation_type = subcommand_type.__annotations__[subcommand_name]
-          actual_type = _get_actual_subcommand_type(annotation_type)
+          actual_type = get_subcommand_type(annotation_type)
           nested_instance = _process_subcommand(actual_type, subcommand_args)
           setattr(subcommand_instance, subcommand_name, nested_instance)
 
       return subcommand_instance
 
-    def _attach_methods(cls_type: t.Type, app_instance: 'App') -> None:
-      for name, attr in cls_type.__dict__.items():
-        if callable(attr):
-          setattr(app_instance, name, types.MethodType(attr, app_instance))
-
-    class App:
-      """Application instance wrapper that handles attribute overrides."""
-
-      def __init__(self, instance: R, overrides: t.Optional[t.Dict[str, t.Any]] = None):
-        self._instance: R = instance
-        self._overrides: t.Dict[str, t.Any] = overrides or {}
-
-      def __getattr__(self, name: str) -> t.Any:
-        if name in self._overrides:
-          return self._overrides[name]
-        return getattr(self._instance, name)
-
-      @staticmethod
-      def from_args() -> 'App':
-        """Create an application instance from command-line arguments."""
-        return build_app(None)
-
-      @staticmethod
-      def from_iter(args: t.Sequence[str]) -> 'App':
-        """Create an application instance from an iterable of arguments."""
-        return build_app(args)
-
-    setattr(App, '__name__', getattr(cls_inner, '__name__'))
+    App.__name__ = cls.__name__
 
     return t.cast(t.Type[AppProtocol[R]], App)
 
@@ -226,53 +191,29 @@ def argument(*name_or_flags: str, **kwargs: t.Any) -> t.Any:
   Args:
     *name_or_flags: Argument name(s) or flag(s)
     **kwargs: Additional arguments for argparse.add_argument
+
+  Returns:
+    A field with custom configuration
   """
   return dataclass_field(
     default=kwargs.get('default', None), metadata={'argument': Argument(*name_or_flags, **kwargs)}
   )
 
 
-def _has_subcommand_parent(cls: t.Type) -> bool:
-  for base in cls.__bases__:
-    if hasattr(base, '__subcommand__') and getattr(base, '__subcommand__'):
-      return True
-
-  return False
-
-
 def subcommand(cls: t.Type[R]) -> t.Type[R]:
   """
   Decorator to mark a class as a subcommand.
 
-  Ensures proper inheritance of dataclass fields.
+  Args:
+    cls: The class to decorate
+
+  Returns:
+    The decorated class
   """
-  current_annotations = getattr(cls, '__annotations__', {})
-
-  for field_name, field_type in current_annotations.items():
-    if hasattr(cls, field_name):
-      continue
-
-    if _is_subcommand_type(field_type):
-      setattr(cls, field_name, None)
-
-  if _has_subcommand_parent(cls):
-    result_cls = dataclass(cls)
-
-    for field_name, _ in current_annotations.items():
-      if field_name not in getattr(result_cls, '__dataclass_fields__'):
-        setattr(
-          result_cls,
-          field_name,
-          dataclass_field(
-            default=None, metadata={'argument': getattr(cls, field_name).metadata['argument']}
-          ),
-        )
-  else:
-    result_cls = dataclass(cls) if not is_dataclass(cls) else cls
-
-  setattr(result_cls, '__subcommand__', True)
-
-  return result_cls
+  _set_default_subcommands(cls)
+  cls = dataclass(cls)
+  setattr(cls, SUBCOMMAND_MARKER, True)
+  return cls
 
 
 __all__ = ['app', 'argument', 'subcommand']
