@@ -19,5 +19,4 @@ class Calculator:
 
 
 if __name__ == '__main__':
-  # uv run examples/simple_subcommand.py add --numbers 1 2 3 4
   Calculator.from_args().run()

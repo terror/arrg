@@ -4,7 +4,7 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "arrg"
-version = "0.0.1"
+version = "0.1.0"
 source = { editable = "." }
 
 [package.dev-dependencies]
