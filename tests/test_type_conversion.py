@@ -1,7 +1,5 @@
 import typing as t
 
-import pytest
-
 from arrg import app, argument
 
 

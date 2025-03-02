@@ -19,15 +19,14 @@ class AppProtocol(t.Protocol[T]):
 
 
 def _is_subcommand_type(field_type: t.Type) -> bool:
-  """Check if a type is a subcommand (directly or via Optional)."""
-  # Direct subcommand
   if hasattr(field_type, '__subcommand__'):
     return True
 
-  # Optional[Subcommand]
   origin = t.get_origin(field_type)
+
   if origin is t.Union:
     args = t.get_args(field_type)
+
     for arg in args:
       if arg is not type(None) and hasattr(arg, '__subcommand__'):
         return True
@@ -36,13 +35,14 @@ def _is_subcommand_type(field_type: t.Type) -> bool:
 
 
 def _get_actual_subcommand_type(field_type: t.Type) -> t.Type:
-  """Extract the actual subcommand type from Optional[Subcommand] if needed."""
   if hasattr(field_type, '__subcommand__'):
     return field_type
 
   origin = t.get_origin(field_type)
+
   if origin is t.Union:
     args = t.get_args(field_type)
+
     for arg in args:
       if arg is not type(None) and hasattr(arg, '__subcommand__'):
         return arg
@@ -135,15 +135,10 @@ def app(
     def _process_parsed_args(
       cls_type: t.Type, parsed_args: t.Dict[str, t.Any], override_fields: t.List[str]
     ) -> t.Tuple[t.Dict[str, t.Any], t.Dict[str, t.Any]]:
-      """
-      Process parsed arguments and separate regular args from overrides and subcommands.
-      Returns a tuple of (args_for_instantiation, override_values).
-      """
       instance_args: t.Dict[str, t.Any] = {}
       subcommand_args: t.Dict[str, t.Dict[str, t.Any]] = {}
       overrides: t.Dict[str, t.Any] = {}
 
-      # Separate regular args, overrides, and subcommands
       for name, value in list(parsed_args.items()):
         if isinstance(value, dict) and name in cls_type.__annotations__:
           subcommand_args[name] = value
@@ -153,7 +148,6 @@ def app(
           else:
             instance_args[name] = value
 
-      # Process subcommand arguments
       for name, args_dict in subcommand_args.items():
         subcommand_type = cls_type.__annotations__[name]
 
@@ -164,7 +158,6 @@ def app(
         actual_type = _get_actual_subcommand_type(subcommand_type)
         instance_args[name] = _process_subcommand(actual_type, args_dict)
 
-      # Initialize missing subcommand fields to None
       for name, field_type in cls_type.__annotations__.items():
         if _is_subcommand_type(field_type) and name not in instance_args:
           instance_args[name] = None
@@ -172,7 +165,6 @@ def app(
       return instance_args, overrides
 
     def _process_subcommand(subcommand_type: t.Type, args_dict: t.Dict[str, t.Any]) -> t.Any:
-      """Process a subcommand and its nested subcommands."""
       nested_subcommands: t.Dict[str, t.Dict[str, t.Any]] = {}
 
       for subcommand_name, value in list(args_dict.items()):
@@ -191,7 +183,6 @@ def app(
       return subcommand_instance
 
     def _attach_methods(cls_type: t.Type, app_instance: 'App') -> None:
-      """Attach methods from the original class to the app instance."""
       for name, attr in cls_type.__dict__.items():
         if callable(attr):
           setattr(app_instance, name, types.MethodType(attr, app_instance))
@@ -242,39 +233,31 @@ def argument(*name_or_flags: str, **kwargs: t.Any) -> t.Any:
 
 
 def _has_subcommand_parent(cls: t.Type) -> bool:
-  """Check if any of the class's parents are subcommands."""
   for base in cls.__bases__:
     if hasattr(base, '__subcommand__') and getattr(base, '__subcommand__'):
       return True
+
   return False
 
 
 def subcommand(cls: t.Type[R]) -> t.Type[R]:
   """
   Decorator to mark a class as a subcommand.
+
   Ensures proper inheritance of dataclass fields.
   """
-  # Get current annotations
   current_annotations = getattr(cls, '__annotations__', {})
 
-  # Set None default for subcommand fields in the current class
   for field_name, field_type in current_annotations.items():
-    # Skip if the field already has a value assigned
     if hasattr(cls, field_name):
       continue
 
-    # Set None as default for any subcommand field
     if _is_subcommand_type(field_type):
       setattr(cls, field_name, None)
 
-  # Apply special dataclass handling for subcommand inheritance
-  parent_is_subcommand = _has_subcommand_parent(cls)
-
-  if parent_is_subcommand:
-    # Create a dataclass that properly inherits fields
+  if _has_subcommand_parent(cls):
     result_cls = dataclass(cls)
 
-    # Ensure all annotations are carried over to dataclass fields
     for field_name, _ in current_annotations.items():
       if field_name not in getattr(result_cls, '__dataclass_fields__'):
         setattr(
@@ -285,10 +268,8 @@ def subcommand(cls: t.Type[R]) -> t.Type[R]:
           ),
         )
   else:
-    # No inheritance complexity
     result_cls = dataclass(cls) if not is_dataclass(cls) else cls
 
-  # Mark as a subcommand
   setattr(result_cls, '__subcommand__', True)
 
   return result_cls
