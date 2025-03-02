@@ -211,7 +211,15 @@ class Parser:
   def _process_subcommand_field(
     self, field_name: str, field_type: t.Type, parser: ArgParser
   ) -> None:
-    self._process_class(
-      field_type,
-      self._get_subparsers_for_parser(parser).add_parser(field_name, help=f'{field_name} command'),
+    subcommand_config = getattr(field_type, '__subcommand_config__', {})
+
+    subcommand_name = subcommand_config.pop('name', field_name)
+
+    if 'help' not in subcommand_config:
+      subcommand_config['help'] = f'{field_name} command'
+
+    subparser = self._get_subparsers_for_parser(parser).add_parser(
+      subcommand_name, **subcommand_config
     )
+
+    self._process_class(field_type, subparser)

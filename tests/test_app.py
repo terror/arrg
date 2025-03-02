@@ -823,3 +823,41 @@ def test_app_inheritance_with_subcommand_inheritance():
   assert result.b == 'b'
   assert result.c.d == 'd'
   assert result.c.v
+
+
+def test_subcommand_with_parameters(capsys):
+  @subcommand(
+    name='pr',
+    aliases=['pr'],
+    help='Create a new pull request',
+    description='Create a new pull request with specified parameters',
+  )
+  class PullRequest:
+    title: str = argument('--title', help='Title of the pull request')
+    base: str = argument('--base', default='main', help='Base branch')
+
+  @app
+  class Git:
+    pr: PullRequest
+
+  result = Git.from_iter(['pr', '--title', 'Fix bug'])
+  assert result.pr.title == 'Fix bug'
+  assert result.pr.base == 'main'
+
+  result = Git.from_iter(['pr', '--title', 'Add feature'])
+  assert result.pr.title == 'Add feature'
+
+  with pytest.raises(SystemExit):
+    Git.from_iter(['--help'])
+
+  captured = capsys.readouterr()
+  assert 'pr' in captured.out
+  assert 'Create a new pull request' in captured.out
+
+  with pytest.raises(SystemExit):
+    Git.from_iter(['pr', '--help'])
+
+  captured = capsys.readouterr()
+  assert 'Create a new pull request with specified parameters' in captured.out
+  assert '--title' in captured.out
+  assert 'Title of the pull request' in captured.out
