@@ -7,16 +7,16 @@ class C:
 
 
 @app
-class A:
-  a: str = argument('--a')
+class B:
+  b: str = argument('--b')
   c: C
 
 
 @app
-class B(A):
-  b: str = argument('--b')
+class A(B):
+  a: str = argument('--a')
 
 
 if __name__ == '__main__':
-  arguments = B.from_args()
+  arguments = A.from_args()
   print(arguments.a + arguments.b + arguments.c.c)

@@ -61,11 +61,9 @@ def test_app_with_prefix_chars():
   class Arguments:
     name: str = argument('+name')
 
-  # Should recognize + as a prefix
   result = Arguments.from_iter(['+name', 'test'])
   assert result.name == 'test'
 
-  # Should not recognize - as a prefix
   with pytest.raises(SystemExit):
     Arguments.from_iter(['--name', 'test'])
 
@@ -75,13 +73,11 @@ def test_app_with_formatter_class(capsys):
   class Arguments:
     name: str
 
-  # Trigger help output
   with pytest.raises(SystemExit):
     Arguments.from_iter(['--help'])
 
   captured = capsys.readouterr()
 
-  # `RawDescriptionHelpFormatter` preserves newlines
   assert 'Line 1\nLine 2\nLine 3' in captured.out
 
 
@@ -90,7 +86,6 @@ def test_app_without_help():
   class Arguments:
     name: str
 
-  # Should not recognize --help
   with pytest.raises(SystemExit):
     Arguments.from_iter(['--help'])
 
@@ -569,25 +564,21 @@ def test_subcommand_inheritance_basic():
   class Git:
     status: Status
 
-  # Test with no arguments
   result = Git.from_iter(['status'])
   assert not result.status.verbose
   assert not result.status.quiet
   assert not result.status.all
 
-  # Test with base class argument
   result = Git.from_iter(['status', '--verbose'])
   assert result.status.verbose
   assert not result.status.quiet
   assert not result.status.all
 
-  # Test with derived class argument
   result = Git.from_iter(['status', '--all'])
   assert not result.status.verbose
   assert not result.status.quiet
   assert result.status.all
 
-  # Test with mixed arguments
   result = Git.from_iter(['status', '--verbose', '--all', '--quiet'])
   assert result.status.verbose
   assert result.status.quiet
@@ -611,14 +602,13 @@ def test_subcommand_inheritance_multilevel():
   class Git:
     push: RemotePush
 
-  # Test with arguments from all levels
   result = Git.from_iter(['push', '--global', '--name', 'upstream', '--force'])
   assert result.push.global_flag
   assert result.push.remote_name == 'upstream'
   assert result.push.force
 
 
-def test_subcommand_inheritance_override():
+def test_subcommand_inheritance_override(capsys):
   @subcommand
   class BaseCommand:
     flag: bool = argument('-f', '--flag', help='Base flag')
@@ -626,9 +616,7 @@ def test_subcommand_inheritance_override():
 
   @subcommand
   class ChildCommand(BaseCommand):
-    # Override flag with different help but same functionality
     flag: bool = argument('-f', '--flag', help='Child flag')
-    # Add a new argument
     extra: bool = argument('-e', '--extra')
 
   @app
@@ -636,22 +624,25 @@ def test_subcommand_inheritance_override():
     base: BaseCommand
     child: ChildCommand
 
-  # Test base command
   result = App.from_iter(['base', '-f'])
   assert result.base.flag
   assert result.base.value == 'base'
 
-  # Test child command with overridden flag
   result = App.from_iter(['child', '-f'])
   assert result.child.flag
   assert result.child.value == 'base'
   assert not result.child.extra
 
-  # Test child command with all flags
   result = App.from_iter(['child', '-f', '--value', 'custom', '-e'])
   assert result.child.flag
   assert result.child.value == 'custom'
   assert result.child.extra
+
+  with pytest.raises(SystemExit):
+    App.from_iter(['child', '--help'])
+
+  captured = capsys.readouterr()
+  assert 'Base flag' in captured.out
 
 
 def test_subcommand_inheritance_with_method():
@@ -673,12 +664,10 @@ def test_subcommand_inheritance_with_method():
   class Git:
     status: StatusCommand
 
-  # Test method from base class
   result = Git.from_iter(['status', '-v'])
   assert result.status.verbose
   assert result.status.get_verbosity() == 2
 
-  # Test method from child class
   result = Git.from_iter(['status', '-a'])
   assert result.status.get_status_mode() == 'full'
   assert result.status.get_verbosity() == 1
@@ -695,104 +684,46 @@ def test_nested_subcommands_with_inheritance():
 
   @subcommand
   class Remote(BaseCommand):
-    # Need to specify this as a field with None default
-    push: t.Optional[PushCommand] = None
     name: str = argument('--name', default='origin')
-
-  @app
-  class Git:
-    remote: Remote
-
-  # Test command with inheritance
-  result = Git.from_iter(['remote', '-v'])
-  assert result.remote.verbose
-  assert result.remote.name == 'origin'
-
-  # For the nested subcommand, we need to check if it was properly initialized
-  result = Git.from_iter(['remote', 'push', '-f'])
-  assert result.remote.push is not None
-  assert result.remote.push.force
-  assert not result.remote.push.verbose
-
-
-def test_nested_subcommands_no_default_value():
-  @subcommand
-  class BaseCommand:
-    verbose: bool = argument('-v', '--verbose')
-
-  @subcommand
-  class PushCommand(BaseCommand):
-    force: bool = argument('-f', '--force')
-
-  @subcommand
-  class Remote(BaseCommand):
-    # No need to specify default=None anymore
     push: PushCommand
-    name: str = argument('--name', default='origin')
 
   @app
   class Git:
     remote: Remote
 
-  # Test command with inheritance
   result = Git.from_iter(['remote', '-v'])
   assert result.remote.verbose
   assert result.remote.name == 'origin'
 
-  # For the nested subcommand, we need to check if it was properly initialized
   result = Git.from_iter(['remote', 'push', '-f'])
   assert result.remote.push is not None
   assert result.remote.push.force
   assert not result.remote.push.verbose
-
-
-def test_subcommand_inheritance_with_properties():
-  @subcommand
-  class BaseCommand:
-    verbose: bool = argument('-v', '--verbose', help='Show verbose output')
-
-  @subcommand
-  class StatusCommand(BaseCommand):
-    all: bool = argument('-a', '--all')
-
-  @app
-  class Git:
-    status: StatusCommand
-
-  # Test property from base class
-  result = Git.from_iter(['status', '-v'])
-  assert result.status.verbose
-  assert not result.status.all
-
-  # Test field from child class
-  result = Git.from_iter(['status', '-a'])
-  assert not result.status.verbose
-  assert result.status.all
 
 
 def test_app_inheritance_with_subcommands():
   @subcommand
   class C:
-    d: str = argument('--d')
+    c: str = argument('--c')
 
   @app
-  class A:
-    a: str = argument('--a')
+  class B:
+    b: str = argument('--b')
     c: C
 
   @app
-  class B(A):
-    b: str = argument('--b')
+  class A(B):
+    a: str = argument('--a')
 
-  result = B.from_iter([])
+  result = A.from_iter([])
   assert result.a is None
   assert result.b is None
   assert result.c is None
 
-  result = B.from_iter(['--a', 'a', '--b', 'b', 'c', '--d', 'd'])
-  assert result.a == 'a'
-  assert result.b == 'b'
-  assert result.c.d == 'd'
+  result = A.from_iter(['--a', 'foo', '--b', 'bar', 'c', '--c', 'baz'])
+  assert result.a == 'foo'
+  assert result.b == 'bar'
+  assert result.c.c == 'baz'
 
 
 def test_app_inheritance_with_subcommand_inheritance():
@@ -827,10 +758,8 @@ def test_app_inheritance_with_subcommand_inheritance():
 
 def test_subcommand_with_parameters(capsys):
   @subcommand(
-    name='pr',
-    aliases=['pr'],
-    help='Create a new pull request',
     description='Create a new pull request with specified parameters',
+    help='Create a new pull request',
   )
   class PullRequest:
     title: str = argument('--title', help='Title of the pull request')
