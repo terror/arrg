@@ -1,6 +1,10 @@
 ## arrg
 
-<div align='left'>
+[![pypi](https://img.shields.io/pypi/v/arrg.svg)](https://pypi.org/project/arrg/)
+[![ci](https://github.com/terror/arrg/actions/workflows/ci.yml/badge.svg)](https://github.com/terror/arrg/actions/workflows/ci.yml)
+[![downloads](https://img.shields.io/pypi/dm/arrg.svg)](https://pypi.org/project/arrg/)
+
+<div align='left' style='margin: 20px 0 20px 0'>
  <img width='10%' src='https://oldschool.runescape.wiki/images/Arrg.png?2e0cb'/>
 </div>
 
@@ -9,7 +13,6 @@ a declarative, class-based approach. It leverages Python type hints and decorato
 to simplify the creation of complex command-line interfaces with arguments and
 subcommands, while maintaining compatibility with the standard [argparse](https://docs.python.org/3/library/argparse.html)
 library.
-
 
 ## Installation
 
