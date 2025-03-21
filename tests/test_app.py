@@ -805,6 +805,7 @@ def test_union_int_str_type_conversion():
   assert isinstance(result.input, str)
   assert result.input == 'test'
 
+
 def test_list_default_value():
   @app
   class Arguments:

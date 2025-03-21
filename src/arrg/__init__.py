@@ -219,7 +219,8 @@ def argument(*name_or_flags: str, **kwargs: t.Any) -> t.Any:
     A field with custom configuration
   """
   return dataclass_field(
-    default_factory=lambda: kwargs.get('default', None), metadata={'argument': Argument(*name_or_flags, **kwargs)}
+    default_factory=lambda: kwargs.get('default', None),
+    metadata={'argument': Argument(*name_or_flags, **kwargs)},
   )
 
 
