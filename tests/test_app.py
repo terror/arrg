@@ -804,3 +804,17 @@ def test_union_int_str_type_conversion():
   result = Arguments.from_iter(['test'])
   assert isinstance(result.input, str)
   assert result.input == 'test'
+
+
+def test_list_default_value():
+  @app
+  class Arguments:
+    input: list[float] = argument('--input', default=[1.0, 2.0, 3.0])
+
+  result = Arguments.from_iter([])
+  assert isinstance(result.input, list)
+  assert result.input == [1.0, 2.0, 3.0]
+
+  result = Arguments.from_iter(['--input', '4.0', '5.0'])
+  assert isinstance(result.input, list)
+  assert result.input == [4.0, 5.0]
