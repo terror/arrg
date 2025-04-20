@@ -24,7 +24,7 @@ count:
   tokei src
 
 fmt:
-   ruff check --select I --fix && ruff format
+   uv run ruff check --select I --fix && uv run ruff format
 
 publish:
   rm -rf dist && uv build && uv publish
