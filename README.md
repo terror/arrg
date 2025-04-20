@@ -310,7 +310,7 @@ class PullRequest:
 
 These get added to their respective subparser instances.
 
-### Prior Art
+## Prior Art
 
 This library is heavily indebted to the rust crate [structopt](https://docs.rs/structopt/latest/structopt/),
 for which heavy inspiration was drawn from.
